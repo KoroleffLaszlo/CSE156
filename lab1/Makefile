@@ -8,10 +8,10 @@ SDIR = src
 
 EXEC = $(BDIR)/main
 
-_OBJ = client.o main.o
+_OBJ = client.o main.o parse.o
 OBJ = $(patsubst %, $(ODIR)/%, $(_OBJ))
 
-_DEPS = client.h
+_DEPS = client.h parse.h
 DEPS = $(patsubst %, $(IDIR)/%, $(_DEPS))
 
 $(ODIR)/%.o: $(SDIR)/%.cpp $(DEPS) | dir

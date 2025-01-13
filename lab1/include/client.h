@@ -4,12 +4,21 @@
 #include <vector>
 #include <cstdint>
 #include <string>
+#include <cstring>
+
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 class Client{
+private:
+    int socket_p;
 public:
-    static int socket_init();
-    static void connectToServer(int, struct sockaddr_in&, std::string, uint16_t);
-    static void sendToServer(int, std::string);
-    static void recieveData(int, std::vector<char>&);
+    Client();
+    ~Client();
+
+    void socket_init();
+    void connectToServer(struct sockaddr_in&, const std::string&, uint16_t);
+    void sendToServer(const std::string&);
+    void recieveData(std::vector<char>&);
 };
 #endif
