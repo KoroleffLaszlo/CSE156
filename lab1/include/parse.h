@@ -12,7 +12,7 @@ private:
 public:
     Parse();
 
-    static void stringParse(const std::string&, std::string&, std::string&, std::string&);
+    static void stringParse(const std::string&, std::vector<std::string>&);
     static void regex_debug(const std::string&);
 };
 #endif

@@ -6,7 +6,7 @@ ODIR = build
 IDIR = include
 SDIR = src
 
-EXEC = $(BDIR)/main
+EXEC = $(BDIR)/myweb
 
 _OBJ = client.o main.o parse.o
 OBJ = $(patsubst %, $(ODIR)/%, $(_OBJ))

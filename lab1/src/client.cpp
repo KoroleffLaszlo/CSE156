@@ -26,14 +26,12 @@ void Client::socket_init(){
     if(socket_p < 0){
         throw std::runtime_error(std::string("socket_init() failed: ") + std::string(strerror(errno)));
     }
-
-    return;
 }
 
-void Client::connectToServer(struct sockaddr_in &srv_addr, const std::string& ip, uint16_t port){
+void Client::connectToServer(struct sockaddr_in &srv_addr, const std::string& ip, const uint16_t port){
     srv_addr.sin_family = AF_INET;
     srv_addr.sin_port = htons(port);
-    if(inet_pton(AF_INET, ip.c_str(), &srv_addr.sin_addr) < 0){
+    if(inet_pton(AF_INET, ip.c_str(), &srv_addr.sin_addr) <= 0){
         close(socket_p);
         throw std::runtime_error("Invalid address: " + std::string(strerror(errno)));
     }
@@ -41,10 +39,7 @@ void Client::connectToServer(struct sockaddr_in &srv_addr, const std::string& ip
     if(connect(socket_p, (struct sockaddr*)&srv_addr, sizeof(srv_addr)) < 0){
         close(socket_p);
         throw std::runtime_error("Connection failure: " + std::string(strerror(errno)));
-        return;
     }
-
-    return;
 }
 
 void Client::sendToServer(const std::string &request){
@@ -52,8 +47,6 @@ void Client::sendToServer(const std::string &request){
         close(socket_p);
         throw std::runtime_error("Request failure: " + std::string(strerror(errno)));
     }
-
-    return;
 }
 
 void Client::recieveData(std::vector<char>& buffer){
@@ -67,6 +60,17 @@ void Client::recieveData(std::vector<char>& buffer){
         close(socket_p );
         throw std::runtime_error("Download failure: " + std::string(strerror(errno)));
     }
+}
 
-    return;
+void Client::processReq(const std::vector<std::string>& client_buffer){
+    std::string flag = client_buffer[3];
+    std::string request;
+    switch(flag){
+        case "-h":
+            request = "HEAD " +  client_buffer[1] + "HTTP/1.1\r\nHost: " + client.buffer[0] + "\r\n\r\n";
+            break;
+        default:
+            request = "GET " +  client_buffer[1] + "HTTP/1.1\r\nHost: " + client.buffer[0] + "\r\n\r\n";
+            break;
+    }
 }
