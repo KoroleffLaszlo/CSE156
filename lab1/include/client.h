@@ -20,5 +20,6 @@ public:
     void connectToServer(struct sockaddr_in&, const std::string&, uint16_t);
     void sendToServer(const std::string&);
     void recieveData(std::vector<char>&);
+    std::string processReq(const std::string&, const std::string&, const std::string&) const;
 };
 #endif

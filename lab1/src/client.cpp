@@ -62,15 +62,13 @@ void Client::recieveData(std::vector<char>& buffer){
     }
 }
 
-void Client::processReq(const std::vector<std::string>& client_buffer){
-    std::string flag = client_buffer[3];
+std::string Client::processReq(const std::string& website, const std::string& filepath, const std::string& flag) const{
     std::string request;
-    switch(flag){
-        case "-h":
-            request = "HEAD " +  client_buffer[1] + "HTTP/1.1\r\nHost: " + client.buffer[0] + "\r\n\r\n";
-            break;
-        default:
-            request = "GET " +  client_buffer[1] + "HTTP/1.1\r\nHost: " + client.buffer[0] + "\r\n\r\n";
-            break;
+
+    if(flag == "-h"){
+        request = "HEAD /" +  filepath + " HTTP/1.1\r\nHost: " + website + "\r\n\r\n";
     }
+    else request = "GET /" +  filepath + " HTTP/1.1\r\nHost: " + website + "\r\n\r\n";
+
+    return request;
 }

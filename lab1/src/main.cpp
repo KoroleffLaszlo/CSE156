@@ -19,33 +19,45 @@
 Client client;
 struct sockaddr_in client_addr;
 
-int main(int argc, char* argv[]){
+
+
+std::string cmdtoStr(const int argc, const char* argv[]){
+    std::string cmdStr;
     if (argc < INPUT_MIN) {
-        std::cerr << "Error: Not enough arguments. At least 2 arguments are required.\n";
-        return 1;
+        throw std::runtime_error(std::string("Error: too few arguments provided"));
     }
+    for (int i = 0; i <argc; ++i){
+        cmdStr += argv[i];
+        if (i < argc - 1) cmdStr += " "; 
+    }
+    return cmdStr;
+
+}
+
+int main(int argc, char* argv[]){
+    std::string cmd
+    std::vector<std::string> request_info;
+
+    //parse cmd line and extract regex necessities 
+    try{
+        cmd = cmdtoStr(argc, argv);
+        Parse::stringParse(cmd, request_info);
+    }catch{}
+    std::string website = request_info[0];
+    std::string ip_address = request_info[1];
+    std::string filepath = request_info[2];
+    std::string port = request_info[3];
+    std::string flag = request_info[4];
+
+    try{
+
+    }catch{}
 
     //init socket
-    client.socket_init();
-
-    //process cmd line
-    std::string combinedArgs;
-
-    for (int i = 0; i < argc; ++i) {
-        combinedArgs += argv[i];  // Append the current argument
-        if (i < argc - 1) {
-            combinedArgs += " ";  // Add a space between arguments (optional)
-        }
-    }
-
-    // Print the resulting combined string
-    std::cout << "Combined string: " << combinedArgs << std::endl;
-    
-    //establish connection
-
-
+    //establish connection to server
     //send request
-    //process request
+    //recieve response
+    //make money...
 
     
     return 0;

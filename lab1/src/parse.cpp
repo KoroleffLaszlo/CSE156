@@ -12,7 +12,7 @@
 const std::string DEFAULT_PORT = "80"; //avoid runtime errors
 
 std::regex Parse::
-    pattern(R"((www\.[\w\.\-]+)\s+(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?\/([\w\.\-]+)( -h)?)");
+    pattern(R"((www\.[\w\.\-]+)\s+(\d{1,3}(?:\.\d{1,3}){3})(?::(\d+))?\/([\w\.\-/]+)( -h)?)");
 
 Parse::Parse(){};
 
@@ -30,43 +30,40 @@ Parse::Parse(){};
 //     }
 //     return;
 // }
-void Parse::stringParse(const std::string& cmd, std::vector<std::string>& client_buffer){
+void Parse::stringParse(const std::string& cmd, std::vector<std::string>& request_info){
     
     std::smatch matches;
 
     if(std::regex_search(cmd, matches, pattern)){
-        info_buffer.push_back(matches[1].str()); //ip address
-        info_buffer.push_back(matches[3].str()); //filepath
+        request_info.push_back(matches[1].str()); //website address
+        request_info.push_back(matches[2].str()); //ip address
+        request_info.push_back(matches[4].str()); //filepath
 
-        if(matches[2].str().empty()){ //port number
-            info_buffer.push_back(DEFAULT_PORT);
+        if(matches[3].str().empty()){ //port number
+            request_info.push_back(DEFAULT_PORT);
             std::cout<<"Port not specified using Default Port 80"<< std::endl;
-        }else info_buffer.push_back(matches[2].str());
+        }else request_info.push_back(matches[3].str());
 
-        if(matches[4].str().empty()){ //flag set
-            info_buffer.push_back("");
-        }else info_buffer.push_back(matches[4].str());
+        if(matches[5].str().empty()){ //flag set
+            request_info.push_back("");
+        }else request_info.push_back(matches[5].str());
     }
     return;
 }
 
 void Parse::regex_debug(const std::string& cmd){
     std::smatch matches;
-    std::string ip, filepath, port;
 
-    if(std::regex_search(cmd, matches, pattern)){
-        ip = matches[1].str();
-        filepath = matches[3].str();
-        if(matches[2].str().empty()){
-            port = DEFAULT_PORT;
-            std::cout<<"Port not specified using Default Port 80"<< std::endl;
-        }else port = matches[2].str(); 
+    if (std::regex_search(cmd, matches, pattern)) {
+        std::cout << "Matched Groups:" << std::endl;
+        std::cout << "Total Groups: " << matches.size() << std::endl;
+        for (size_t i = 0; i < matches.size(); ++i) {
+            std::cout << "Group " << i << ": " << matches[i].str() << std::endl;
+        }
+    } else {
+        std::cout << "No match found." << std::endl;
     }
 
-    std::cout << "Matched Groups:" << std::endl;
-    for (size_t i = 0; i < matches.size(); ++i) {
-        std::cout << "Group " << i << ": " << matches[i].str() << std::endl;
-    }
     return;
 }
 
