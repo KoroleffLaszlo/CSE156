@@ -16,49 +16,47 @@
 
 #define INPUT_MIN 3
 
-Client client;
-struct sockaddr_in client_addr;
-
-
-
-std::string cmdtoStr(const int argc, const char* argv[]){
-    std::string cmdStr;
+std::string cmdtoStr(int argc, char* argv[]) {
     if (argc < INPUT_MIN) {
-        throw std::runtime_error(std::string("Error: too few arguments provided"));
+        throw std::runtime_error("Error: too few arguments provided");
     }
-    for (int i = 0; i <argc; ++i){
+    std::string cmdStr;
+    for (int i = 0; i < argc; ++i) {
         cmdStr += argv[i];
-        if (i < argc - 1) cmdStr += " "; 
+        if (i < argc - 1) cmdStr += " ";
     }
     return cmdStr;
-
 }
 
-int main(int argc, char* argv[]){
-    std::string cmd
-    std::vector<std::string> request_info;
+int main(int argc, char* argv[]) {
+    std::string cmd;
+    std::vector<std::string> request_info; // Initialize correctly
+    std::string request_str;
+    std::vector<char> buffer; // Initialize buffer
+    Client client;
+    struct sockaddr_in client_addr;
 
-    //parse cmd line and extract regex necessities 
-    try{
+    try {
         cmd = cmdtoStr(argc, argv);
-        Parse::stringParse(cmd, request_info);
-    }catch{}
-    std::string website = request_info[0];
-    std::string ip_address = request_info[1];
-    std::string filepath = request_info[2];
-    std::string port = request_info[3];
-    std::string flag = request_info[4];
+        Parse::stringParse(cmd, request_info); 
 
-    try{
+        //Parse::regex_debug(cmd);
 
-    }catch{}
+        std::string host_url = request_info[0];
+        std::string ip_address = request_info[1];
+        std::string filepath = request_info[2];
+        uint16_t port = static_cast<uint16_t>(std::stoi(request_info[3])); //str -> uint16_t for port
+        std::string flag = request_info[4];
 
-    //init socket
-    //establish connection to server
-    //send request
-    //recieve response
-    //make money...
+        client.socket_init();
+        request_str = client.processReq(host_url, filepath, flag);
+        client.connectToServer(client_addr, ip_address, port);
+        client.sendToServer(request_str);
+        client.recieveData(buffer, flag == "-h"); // Check if HEAD request
+    } catch (const std::exception& e) {
+        std::cerr << "Error in main(): " << e.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 
-    
-    return 0;
+    return EXIT_SUCCESS;
 }
