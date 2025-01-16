@@ -156,7 +156,6 @@ std::string Client::processReq(const std::string& host_url, const std::string& f
     std::string filepath_p;
 
     if(filepath.empty()){ //to fix non given filepath
-        std::cout<<"EMPTY"<<std::endl;
         filepath_p = "";
     }else filepath_p = filepath;
 
@@ -164,8 +163,7 @@ std::string Client::processReq(const std::string& host_url, const std::string& f
         request = "HEAD /" +  filepath_p + " HTTP/1.1\r\nHost: " + host_url + "\r\n\r\n";
         
     }
-    else request = "GET / HTTP/1.1\r\nHost: " + host_url + "\r\n\r\n";
-    // else request = "GET /" +  filepath_p + " HTTP/1.1\r\nHost: " + host_url + "\r\n\r\n";
-    std::cout<<request<<std::endl;
+    else request = "GET /" +  filepath_p + " HTTP/1.1\r\nHost: " + host_url + "\r\n\r\n";
+
     return request;
 }

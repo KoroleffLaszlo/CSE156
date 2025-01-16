@@ -40,7 +40,7 @@ int main(int argc, char* argv[]) {
         cmd = cmdtoStr(argc, argv);
         Parse::stringParse(cmd, request_info); 
 
-        Parse::regex_debug(cmd); //debug purposes
+        //Parse::regex_debug(cmd); //debug purposes
 
         std::string host_url = request_info[0];
         std::string ip_address = request_info[1];
