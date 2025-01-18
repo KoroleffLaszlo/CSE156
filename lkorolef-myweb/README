@@ -1,0 +1,19 @@
+Laszlo Koroleff
+1839634
+
+For my source files I have 4: client.cpp, log.cpp, parse.cpp, and main.cpp. These are found in the "/src" directory.
+ - Client.cpp is where all client/server connections, port initialization, and message exchanges occur. Here we have the
+majority of code/logic when recieving a response from the server. 
+ - Log.cpp is intended to seperate all file writing away from other source files. It's purpose is to write to (and in some scenerios create) our output.dat file when called apon. 
+ - Parse.cpp is where our regex parsing occurs. Calling on a simple function to parse a string (intended for the command line arguments) and directly interact with a vector that is passed to the parameter.
+ - Main.cpp is self explanatory, it contains the collection of functions to operate and maintain the client interaction with the server and all appropriate error heirarchy responses.
+
+The header files are all respective to the source files. These are found in the "/include" directory.
+
+The build files are all respective to the source files. These are found in the "/build" directory.
+
+The executable and output.dat file are found in the "/bin" directory.
+
+The documentation on test cases and such is found in the "/doc" directory.
+
+Makefile is my Makefile.

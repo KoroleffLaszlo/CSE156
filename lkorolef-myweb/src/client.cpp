@@ -31,7 +31,7 @@ void Client::socket_init(){
 }
 
 void Client::ip_is_equal(const std::string& host_ip, const std::string& cmd_ip) {
-    if (host_ip != cmd_ip) {
+    if(host_ip != cmd_ip) {
         throw std::runtime_error("ip_is_equal() failure: IP addresses do not match");
     }
 }
@@ -44,12 +44,12 @@ std::string Client::host_ip_resolve(const std::string& host_url) {
 
     // resolve hostname to ip address
     int status = getaddrinfo(host_url.c_str(), nullptr, &hints, &res);
-    if (status != 0) {
+    if(status != 0) {
         throw std::runtime_error("getaddrinfo in host_ip_resolve() error: " + std::string(gai_strerror(status)));
     }
     // extract ip address
     char ip_str[NI_MAXHOST];
-    if (getnameinfo(res->ai_addr, res->ai_addrlen, ip_str, sizeof(ip_str), nullptr, 0, NI_NUMERICHOST) != 0) {
+    if(getnameinfo(res->ai_addr, res->ai_addrlen, ip_str, sizeof(ip_str), nullptr, 0, NI_NUMERICHOST) != 0) {
         freeaddrinfo(res);
         throw std::runtime_error("getnameinfo in host_ip_resolve() error: " + std::string(strerror(errno)));
     }
@@ -93,26 +93,32 @@ void Client::recieveData(std::vector<char>& buffer, bool isHeadRequest) {
         while ((err = recv(socket_p, temp_buffer, BUFFER_SIZE, 0)) > 0) {
             buffer.insert(buffer.end(), temp_buffer, temp_buffer + err);
 
-            if (!header_parsed) {
+            if(!header_parsed) {
                 std::string received_data(buffer.begin(), buffer.end());
                 header_end_pos = received_data.find("\r\n\r\n");
 
-                if (header_end_pos != std::string::npos) {
+                if(header_end_pos != std::string::npos) {
                     header = received_data.substr(0, header_end_pos + 4);
                     header_parsed = true;
 
-                    if (isHeadRequest) {
-                        std::cout << header << std::endl;
-                        return;
+                    if(header.find("Transfer-Encoding: chunked") != std::string::npos){
+                        close(socket_p);
+                        throw std::runtime_error("Chunked encoding not supported");
                     }
 
+                    if(isHeadRequest) {
+                        std::cout << header << std::endl;
+                        close(socket_p);
+                        return;
+                    }
+                    
                     size_t content_length_pos = header.find("Content-Length: ");
-                    if (content_length_pos != std::string::npos) {
+                    if(content_length_pos != std::string::npos) {
                         content_length_pos += 16; // Length of "Content-Length: "
                         size_t end_of_line = header.find("\r\n", content_length_pos);
                         content_length = std::stoul(header.substr(content_length_pos, end_of_line - content_length_pos));
                         
-                    } else {
+                    }else {
                         close(socket_p);
                         return;
                     }
@@ -124,12 +130,11 @@ void Client::recieveData(std::vector<char>& buffer, bool isHeadRequest) {
                     Log::handle_response(buffer_string);
                 }
 
-            } else {
-                body_received+= err;
-            }
+            } else body_received+= err;
+
 
             // log web page to .dat file
-            if (header_parsed && body_received == content_length){
+            if(header_parsed && body_received == content_length){
                 std::string response_body(buffer.begin(), buffer.end());
                 Log::handle_response(response_body);
                 close(socket_p);
@@ -137,16 +142,16 @@ void Client::recieveData(std::vector<char>& buffer, bool isHeadRequest) {
             }
         }
 
-        if (err < 0) {
+        if(err < 0) {
             close(socket_p);
             throw std::runtime_error("Request failure: " + std::string(strerror(errno)));
         }
 
-        if (header_parsed && body_received < content_length) {
+        if(header_parsed && body_received < content_length) {
             close(socket_p);
             throw std::runtime_error("Incomplete body response");
         }
-    } catch (const std::exception& e){
+    } catch(const std::exception& e){
         throw std::runtime_error("Error initializing log file: " + std::string(e.what()));
     }
 }

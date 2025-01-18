@@ -1,5 +1,5 @@
 CC = g++
-CFLAG = -Wall -Werror -g
+CFLAG = -Wall -Werror -g -lstdc++fs
 
 BDIR = bin
 ODIR = build

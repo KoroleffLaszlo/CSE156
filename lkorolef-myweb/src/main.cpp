@@ -17,13 +17,13 @@
 #define INPUT_MIN 3
 
 std::string cmdtoStr(int argc, char* argv[]) {
-    if (argc < INPUT_MIN) {
+    if(argc < INPUT_MIN) {
         throw std::runtime_error("Error: too few arguments provided");
     }
     std::string cmdStr;
-    for (int i = 0; i < argc; ++i) {
+    for(int i = 0; i < argc; ++i) {
         cmdStr += argv[i];
-        if (i < argc - 1) cmdStr += " ";
+        if(i < argc - 1) cmdStr += " ";
     }
     return cmdStr;
 }
@@ -55,7 +55,7 @@ int main(int argc, char* argv[]) {
         client.sendToServer(request_str);
         client.recieveData(buffer, flag == " -h"); // Check if HEAD request
 
-    } catch (const std::exception& e) {
+    }catch (const std::exception& e) {
         std::cerr << "Error in main: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
