@@ -17,8 +17,8 @@ public:
     ~Server();
 
     void socket_init();
-    void server_bind();
+    void server_bind(struct sockaddr_in&, const int);
+    void server_send(struct sockaddr_in&, const std::vector<uint8_t>&, const socklen_t&);
     void server_recv();
-    void server_send();
-
-}
+};
+#endif
