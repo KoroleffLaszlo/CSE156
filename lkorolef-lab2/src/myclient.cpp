@@ -14,12 +14,11 @@
 #include <cstdint>
 #include <fstream>
 
-#include "../include/file_t.h"
 #include "../include/client.h"
 
 #define MTU_MAX 31970
 
-struct File_t file_handler;
+struct Client client_handler;
 
 int main(int argc, char* argv[]) {
     if (argc != 6) {
@@ -39,7 +38,7 @@ int main(int argc, char* argv[]) {
     }
 
     try {
-        file_handler.fileRead(input_file, output_file, srv_ip, mtu, srv_port);
+        client_handler.fileRead(input_file, output_file, srv_ip, mtu, srv_port);
     } catch (const std::exception& e) {
         std::cerr<<"Error: "<< e.what() <<std::endl;
         return EXIT_FAILURE;

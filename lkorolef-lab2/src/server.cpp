@@ -43,7 +43,6 @@ void Server::server_send(struct sockaddr_in &client_addr, const std::vector<uint
     if(bytes_sent < 0){
         throw std::runtime_error(std::string("server bytes sent failed: ") + std::string(strerror(errno)));
     }
-    std::cout<<"SENT"<<std::endl;
 }
 
 void Server::server_recv(){
@@ -57,7 +56,6 @@ void Server::server_recv(){
             throw std::runtime_error(std::string("server bytes received failed: ") + std::string(strerror(errno)));
         }
         buffer.resize(bytes_read); //downsizes vector to client set MTU size or smaller
-        std::cout<<"RECEIVED"<<std::endl;
         server_send(client_addr, buffer, addr_len);
     }
 }
