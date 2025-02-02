@@ -13,10 +13,16 @@
 #include <unistd.h>
 #include <cstdint>
 #include <fstream>
-#include <map>
-#include <fstream>          
+#include <map>         
 #include <sys/stat.h>
 #include <limits.h>
+
+#include "../include/client.h"
+#include "../include/datagram.h"
+
+#define META_FLAG 0
+#define DATA_FLAG 1
+#define ACK_FLAG 2
 
 Client::Client() : socket_p(-1){};
 
@@ -42,8 +48,12 @@ void Client::socket_init(){
     }
 }
 
+void Client::send_metaData_packet(const sockaddr_in& srv_addr, const int &winsz){
+    //send 
+}
+
 // sends winsz number of packets of data size mss, receives ACK
-size_t Client::client_send_and_receive(const char *srv_ip, const int &srv_port, const int &winsz){
+void Client::client_send_and_receive(const char *srv_ip, const int &srv_port, const int &winsz, const int &mss){
     struct sockaddr_in srv_addr;
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
@@ -53,8 +63,17 @@ size_t Client::client_send_and_receive(const char *srv_ip, const int &srv_port, 
     }
     socklen_t addr_len = sizeof(srv_addr);
 
-    //map containing winsz pckts [seq_num]->ACK key/value pairing
-    std::map<uint16_t, uint8_t> window; 
+    //send metadata packet
+    //read from file in chunks of winsz (pass winsz and mss to file_read())
+        //save last writing spot to continue from in future?
+    //send winsz number of packets to server 
+        //map for each window [seq_num]->ACK key/value pairing
+        //wait for ACKs after some time
+            //resend packets if ACK not received
+        //continue back to file_read() with saved writing spot
+    // map containing winsz pckts [seq_num]->ACK key/value pairing
+    
+    std::map<uint16_t, uint8_t> window;
     size_t seq_num = 0, packet_num = 0;
     while(packet_num < pack_buffer.size()){
         

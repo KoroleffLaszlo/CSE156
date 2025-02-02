@@ -6,8 +6,6 @@
 #include <cstdint>
 #include <string>
 #include <cstring>
-#include <cstdint>
-#include <fstream>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,8 +21,8 @@ private:
 public:
     Client();
     ~Client();
-
-
+    
     std::vector<uint8_t> encode_dgram(uint16_t);
+    uint16_t decode_dgram(std::vector<uint8_t>);
 };
 #endif
