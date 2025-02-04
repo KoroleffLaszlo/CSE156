@@ -22,8 +22,8 @@ public:
     void socket_init();
     void server_bind(struct sockaddr_in&, const int&);
 
-    void server_send(struct sockaddr_in&, 
-                    const std::vector<uint8_t> &buffer,
+    void server_send_ack(struct sockaddr_in&, 
+                    uint16_t,
                     const socklen_t&);
     void server_recv(const int&);
     

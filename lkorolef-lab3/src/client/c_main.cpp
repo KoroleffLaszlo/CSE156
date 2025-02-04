@@ -14,7 +14,7 @@
 #include <cstdint>
 #include <fstream>
 
-#include "../include/client.h"
+#include "../../include/client.h"
 
 int main(int argc, char* argv[]){
     if(argc != 7){

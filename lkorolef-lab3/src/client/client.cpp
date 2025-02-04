@@ -48,12 +48,12 @@ void Client::socket_init(){
     }
 }
 
-void Client::send_metaData_packet(const sockaddr_in& srv_addr, const int &winsz){
-    //send 
-}
-
 // sends winsz number of packets of data size mss, receives ACK
-void Client::client_send_and_receive(const char *srv_ip, const int &srv_port, const int &winsz, const int &mss){
+void Client::client_send_and_receive(const char *srv_ip, 
+                                    const int &srv_port, 
+                                    const int &winsz, 
+                                    const int &mss, 
+                                    const string &outPath){
     struct sockaddr_in srv_addr;
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
