@@ -13,9 +13,8 @@
 
 class Dgram{
 private:
-    struct dgram_t{ //package datagram
+    struct dgram_t{ // client package datagram
         uint16_t seq_num;
-        uint8_t ack;
         std::vector<uint8_t> data_body;
     };
 

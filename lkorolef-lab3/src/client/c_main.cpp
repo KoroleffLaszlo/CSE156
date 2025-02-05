@@ -16,12 +16,22 @@
 
 #include "../../include/client.h"
 
+Client client;
 int main(int argc, char* argv[]){
     if(argc != 7){
         std::cerr << "Incorrect number of arguments" << std::endl;
         return EXIT_SUCCESS
     }
     
-    //TODO?: send metadata first (i.e. send out-file-path)
+    
+    try{
+        client.socket_init();
+        client.client_send_and_receive();
+        
+    }catch(const std::exception &e){
+        std::cerr<<"Error: "<< e.what() <<std::endl;
+    }
+    return EXIT_SUCCESS;
+}
     return EXIT_SUCCESS
 }

@@ -17,12 +17,15 @@
 #include <sys/stat.h>
 #include <limits.h>
 
-#include "../include/client.h"
-#include "../include/datagram.h"
+#include "../../include/client/client.h"
+#include "../../include/common/datagram.h"
 
 #define META_FLAG 0
 #define DATA_FLAG 1
 #define ACK_FLAG 2
+#define TERM_FLAG 3 // terminating packet
+
+Dgram dgram;
 
 Client::Client() : socket_p(-1){};
 
@@ -51,19 +54,26 @@ void Client::socket_init(){
 // sends winsz number of packets of data size mss, receives ACK
 void Client::client_send_and_receive(const char *srv_ip, 
                                     const int &srv_port, 
-                                    const int &winsz, 
+                                    const uint16_t &winsz, 
                                     const int &mss, 
-                                    const string &outPath){
+                                    const std::string &filename){
     struct sockaddr_in srv_addr;
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
     stv_addr.sin_port = htons(srv_port);
     if(inet_pton(AF_INET, srv_ip, &srv_addr.sin_addr) <= 0){
+        close(socket_p);
         throw std::runtime_error("Invalid server IP address");
     }
     socklen_t addr_len = sizeof(srv_addr);
 
     //send metadata packet
+    std::vector<uint8_t> meta_packet = dgram.encode_meta_packet(winsz, filename);
+    int bytes_read = recvfrom(socket_p, meta_packet.data(), meta_packet.size(), 0, (struct sockaddr*)&srv_addr, &addr_len);
+    if (bytes_read < 0){
+        close(socket_p);
+        throw std::runtime_error(std::string("Server bytes received failed: ") + std::string(strerror(errno)));
+    }
     //read from file in chunks of winsz (pass winsz and mss to file_read())
         //save last writing spot to continue from in future?
     //send winsz number of packets to server 

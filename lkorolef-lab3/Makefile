@@ -20,10 +20,10 @@ OBJ_S = $(patsubst %, $(ODIR)/server/%, $(_OBJ_S)) $(OBJ_U)
 _DEPS_S = server.h conn.h
 DEPS_S = $(patsubst %, $(IDIR)/server/%, $(_DEPS_S))  $(DEPS_U)
 
-# _OBJ_C = client.o c_main.o
-# OBJ_C = $(patsubst %, $(ODIR)/%, $(_OBJ_C))
-# _DEPS_C = client.h
-# DEPS_C = $(patsubst %, $(IDIR)/%, $(_DEPS_C))
+_OBJ_C = client.o c_main.o
+OBJ_C = $(patsubst %, $(ODIR)/client/%, $(_OBJ_C)) $(DEPS_U)
+_DEPS_C = client.h
+DEPS_C = $(patsubst %, $(IDIR)/client%, $(_DEPS_C)) $(DEPS_U)
 
 .DEFAULT_GOAL := all
 
@@ -33,18 +33,21 @@ $(ODIR)/common/%.o: $(SDIR)/common/%.cpp | dir
 $(ODIR)/server/%.o: $(SDIR)/server/%.cpp | dir
 	$(CC) -c -o $@ $< $(CFLAG)
 
+$(ODIR)/client/%.o: $(SDIR)/client/%.cpp | dir
+	$(CC) -c -o $@ $< $(CFLAG)
+
 $(TARGET_S): $(OBJ_S) | dir
 	$(CC) -o $@ $^ $(CFLAG)
 
-# $(TARGET_C): $(OBJ_C) | dir
-# 	$(CC) -o $@ $^ $(CFLAG)
+$(TARGET_C): $(OBJ_C) | dir
+	$(CC) -o $@ $^ $(CFLAG)
 
-all:  $(TARGET_S) #$(TARGET_C)
+all:  $(TARGET_S) $(TARGET_C)
 
 .PHONY: all dir clean
 
 dir: # TODO: add client obj directory
-	@mkdir -p $(BDIR) $(ODIR)/common $(ODIR)/server 
+	@mkdir -p $(BDIR) $(ODIR)/common $(ODIR)/server $(ODIR)/client
 
 clean:
-	rm -rf $(ODIR)/* $(TARGET_S) core
+	rm -rf $(ODIR)/* $(BDIR)/* core

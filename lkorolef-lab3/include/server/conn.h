@@ -23,13 +23,14 @@ public:
         std::string filePath; 
         uint16_t winSize;
         int write_pos; //saved write position for each file
+        uint16_t base_seq_num; // starting window seq_num position
         //[seq_num] -> data 
         std::map<uint16_t, std::vector<uint8_t>> buffer;
 
-        ClientState(const std::string& path = "", uint16_t size = 0, int pos = 0)
-            : filePath(path), winSize(size), write_pos(pos){}
+        ClientState(const std::string& path = "", uint16_t init = 0, int pos = 0)
+            : filePath(path), winSize(init), write_pos(pos), base_seq_num(init){}
     };
-    
+
     void addClient(const std::string&, uint16_t, const std::string&, uint16_t);
     bool clientExists(const std::string&, uint16_t) const;
     const ClientState& getClientState(const std::string&, uint16_t) const;

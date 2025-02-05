@@ -24,7 +24,7 @@
 
 #define TIMEOUT 3
 #define META_FLAG 0
-#define TERM_FLAG 4 // client finished terminate connection
+#define FIN_FLAG 4 // client finished terminate connection
 
 Conn conn;
 Dgram dgram;
@@ -66,64 +66,67 @@ void Server::server_send_ack(struct sockaddr_in &client_addr, uint16_t seq_num, 
 
 void Server::server_recv(const int& droppc){
     struct sockaddr_in client_addr;
-    fd_set rfds; //setting timeout for multi-client handling
     memset(&client_addr, 0, sizeof(client_addr));
     socklen_t addr_len = (socklen_t)sizeof(client_addr);
 
     while(1){
-        FD_ZERO(&rfds);
-        FD_SET(socket_p, &rfds);
-        struct timeval timeout = {TIMEOUT,0};
-
-        int err = select(socket_p + 1, &rfds, NULL, NULL, &timeout);
-        if(err == -1){
-            std::cerr<<"Connection lost to client - Error: "<< strerror(errno) << std::endl;
-            continue; // client lost connection so connect to possible other clients
+        std::vector<uint8_t> buffer(MTU_MAX);
+        memset(&client_addr, 0, sizeof(client_addr));
+        int bytes_read = recvfrom(socket_p, buffer.data(), buffer.size(), 0, (struct sockaddr*)&client_addr, &addr_len);
+        if (bytes_read < 0){
+            close(socket_p);
+            throw std::runtime_error(std::string("Server bytes received failed: ") + std::string(strerror(errno)));
         }
-        if(FD_ISSET(socket_p, &rfds)){ // connected to single client
-            std::vector<uint8_t> buffer(MTU_MAX);
-            memset(&client_addr, 0, sizeof(client_addr));
-            int bytes_read = recvfrom(socket_p, buffer.data(), buffer.size(), 0, (struct sockaddr*)&client_addr, &addr_len);
-            if (bytes_read < 0){
-                close(socket_p);
-                throw std::runtime_error(std::string("Server bytes received failed: ") + std::string(strerror(errno)));
-            }
-            buffer.resize(bytes_read);
+        buffer.resize(bytes_read);
 
-            // simulate packet dropping
-            int rand_num = rand() % 100;
-            if(rand_num < droppc){ // TODO: Log dropped packets 
-                continue;
-            }
+        // simulate packet dropping
+        int rand_num = rand() % 100;
+        if(rand_num < droppc){ // TODO: Log dropped packets 
+            continue;
+        }
 
-            std::string client_ip = inet_ntoa(client_addr.sin_addr);
-            uint16_t client_port = ntohs(client_addr.sin_port);
+        std::string client_ip = inet_ntoa(client_addr.sin_addr);
+        uint16_t client_port = ntohs(client_addr.sin_port);
 
-            // creating Client profile (clientState struct) for new/existing client
-            if(buffer[0] == META_FLAG){
-                std::pair<uint16_t, std::string> meta_data = dgram.decode_meta_packet(buffer);
-                conn.addClient(client_ip, client_port, meta_data.second, meta_data.first);
-                continue;
-            }
+        // creating Client profile (clientState struct) for new/existing client
+        if(buffer[0] == META_FLAG){
+            std::pair<uint16_t, std::string> meta_data = dgram.decode_meta_packet(buffer);
+            conn.addClient(client_ip, client_port, meta_data.second, meta_data.first);
+            server_send_ack(client_addr, 0, addr_len); // send ack for meta (no sequence num needed)
+            continue;
+        }
 
-            //else data packet
-            //data packets: [0]:flag; [1-2]:seq_num; [3-end]: data-body
-            uint16_t seq_num = dgram.decode_bytes(std::vector<uint8_t>(buffer.begin() + 1, buffer.begin() + 3));
-            Conn::ClientState& clientState = conn.getClientState(client_ip, client_port);
+        if(buffer[0] == FIN_FLAG){
+            server_send_ack(client_addr, 0, addr_len); // send ack for meta (no sequence num needed)
+            // TODO: write whatever is left in map (since the client doesn't have anything left to provide)
+                // delete clientState and its place in the client tracking map
+            std::cout<<"FIN_FLAG"<<std::endl; 
+        }
 
-            // ACK lost in response to client, don't duplicate -> resend ACK
-            if(clientState.buffer.find(seq_num) != clientState.buffer.end()){
+        //else data packet
+        //data packets: [0]:flag; [1-2]:seq_num; [3-end]: data-body
+        uint16_t seq_num = dgram.decode_bytes(std::vector<uint8_t>(buffer.begin() + 1, buffer.begin() + 3));
+        Conn::ClientState& clientState = conn.getClientState(client_ip, client_port);
+        
+        // ACK lost in response to client, don't duplicate -> resend ACK
+        if(clientState.buffer.find(seq_num) != clientState.buffer.end()){
+            server_send_ack(client_addr, seq_num, addr_len);
+        }else{
+            // is seq_num from prev window
+            if(seq_num < clientState.base_seq_num){
                 server_send_ack(client_addr, seq_num, addr_len);
+                continue; // accept new packets (back to top)
             }else{
                 // else store into clientState map and send ACK
                 clientState.buffer[seq_num] = std::vector<uint8_t>(&buffer[3], &buffer[bytes_read - 3]);
                 server_send_ack(client_addr, seq_num, addr_len);
             }
-            if(clientState.buffer.size() == clientState.winSize){
-                //TODO: write file function
-                clientState.buffer.clear();
-                continue; // remove once writing function works
-            }
+        }
+        if(clientState.buffer.size() == clientState.winSize){
+            std::cout<<"MOVING WINDOW"<<std::endl;
+            //TODO: write file function
+            clientState.buffer.clear();
+            continue; // remove once writing function works
         }
     }
 }
