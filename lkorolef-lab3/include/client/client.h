@@ -20,16 +20,24 @@ public:
     ~Client();
 
     struct dgram_t{
-        uint16_t sequence_num;
+        uint32_t sequence_num;
         std::vector<uint8_t> data_body;
     };
     
     void socket_init();
-    size_t client_send_and_receive(const int&,
-                                const char*,
-                                const std::vector<Client::dgram_t>&,
-                                std::ofstream&,
-                                size_t,
-                                const int&);
+    void client_send_packet(struct sockaddr_in&, 
+                                int,
+                                uint32_t, 
+                                std::vector<uint8_t>, 
+                                const socklen_t&);
+    // void client_send_data(struct sockaddr_in&, uint32_t, std::vector<uint8_t>, const socklen_t&);
+    // void set_client_info(struct sockaddr_in&, uint32_t, std::vector<uint8_t>, const socklen_t&);
+    void waitForAck(struct sockaddr_in&, socklen_t);
+    void client_communicate(const char*,
+                    const int&,
+                    const uint32_t&,
+                    const int&,
+                    const std::string&,
+                    const std::string&);
 };
 #endif

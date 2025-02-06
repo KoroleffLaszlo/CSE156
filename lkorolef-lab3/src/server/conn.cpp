@@ -11,7 +11,7 @@ Conn::~Conn() {
     clients.clear();
 }
 
-void Conn::addClient(const std::string& ip, uint16_t port, const std::string& filePath, uint16_t winSize){
+void Conn::addClient(const std::string& ip, uint16_t port, const std::string& filePath, uint32_t winSize){
     auto clientKey = std::make_pair(ip, port);
     if (clients.find(clientKey) == clients.end()) {
         clients[clientKey] = ClientState(filePath, winSize);

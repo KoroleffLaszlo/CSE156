@@ -1,5 +1,5 @@
 CC = g++
-CFLAG = -Wall -Werror -g -lstdc++fs
+CFLAG = -Wall -Werror -g -I$(IDIR)
 
 BDIR = bin
 ODIR = build
@@ -7,13 +7,13 @@ IDIR = include
 SDIR = src
 
 TARGET_S = $(BDIR)/myserver
-# TARGET_C = $(BDIR)/myclient
+TARGET_C = $(BDIR)/myclient
 
 # universally used dependents 
-_OBJ_U = datagram.o # TODO: add respective file_t file read/write wrapper
+_OBJ_U = datagram.o file_t.o
 OBJ_U = $(patsubst %, $(ODIR)/common/%, $(_OBJ_U))
-_DEPS_U = datagram.h
-DEPS_U = $(patsubst %, $(ODIR)/common/%, $(_DEPS_U))
+_DEPS_U = datagram.h file_t.h
+DEPS_U = $(patsubst %, $(IDIR)/common/%, $(_DEPS_U))
 
 _OBJ_S = server.o s_main.o conn.o
 OBJ_S = $(patsubst %, $(ODIR)/server/%, $(_OBJ_S)) $(OBJ_U)
@@ -21,9 +21,9 @@ _DEPS_S = server.h conn.h
 DEPS_S = $(patsubst %, $(IDIR)/server/%, $(_DEPS_S))  $(DEPS_U)
 
 _OBJ_C = client.o c_main.o
-OBJ_C = $(patsubst %, $(ODIR)/client/%, $(_OBJ_C)) $(DEPS_U)
+OBJ_C = $(patsubst %, $(ODIR)/client/%, $(_OBJ_C)) $(OBJ_U)
 _DEPS_C = client.h
-DEPS_C = $(patsubst %, $(IDIR)/client%, $(_DEPS_C)) $(DEPS_U)
+DEPS_C = $(patsubst %, $(IDIR)/client/%, $(_DEPS_C)) $(DEPS_U)
 
 .DEFAULT_GOAL := all
 

@@ -12,18 +12,23 @@
 #include <netinet/in.h>
 
 class Dgram{
-private:
+public:
     struct dgram_t{ // client package datagram
-        uint16_t seq_num;
+        uint32_t seq_num;
         std::vector<uint8_t> data_body;
+
+        dgram_t(uint32_t seq, const std::vector<uint8_t>& data)
+            : seq_num(seq), data_body(data) {}
     };
 
-public:
-    std::vector<uint8_t> encode_bytes(uint16_t);
-    uint16_t decode_bytes(std::vector<uint8_t>);
-    std::vector<uint8_t> encode_meta_packet(uint16_t, std::string);
-    std::pair<uint16_t, std::string> decode_meta_packet(std::vector<uint8_t>);
-    std::vector<uint8_t> encode_ack_packet(uint16_t);
-    uint16_t decode_ack_packet(std::vector<uint8_t>);
+    std::vector<uint8_t> encode_bytes(uint32_t);
+    uint32_t decode_bytes(std::vector<uint8_t>);
+    std::vector<uint8_t> encode_data_packet(uint32_t, std::vector<uint8_t>);
+    std::vector<uint8_t> encode_meta_packet(uint32_t, std::string);
+    std::pair<uint32_t, std::string> decode_meta_packet(std::vector<uint8_t>);
+    std::vector<uint8_t> encode_ack_packet(uint32_t);
+    uint32_t decode_ack_packet(std::vector<uint8_t>);
+    std::vector<uint8_t> encode_fin_packet(uint32_t);
+    uint32_t decode_fin_packet(std::vector<uint8_t>);
 };
 #endif

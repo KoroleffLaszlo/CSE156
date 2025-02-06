@@ -23,7 +23,7 @@ public:
     void server_bind(struct sockaddr_in&, const int&);
 
     void server_send_ack(struct sockaddr_in&, 
-                    uint16_t,
+                    uint32_t,
                     const socklen_t&);
     void server_recv(const int&);
     

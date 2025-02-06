@@ -17,17 +17,21 @@
 #include <sys/time.h>    
 #include <unistd.h>      
 #include <fcntl.h>     
+#include <bitset>
 
 #include "../../include/server/server.h"
 #include "../../include/server/conn.h"
 #include "../../include/common/datagram.h"
+#include "../../include/common/file_t.h"
 
+#define MTU_MAX 32000
 #define TIMEOUT 3
 #define META_FLAG 0
-#define FIN_FLAG 4 // client finished terminate connection
+#define FIN_FLAG 3 // client finished terminate connection
 
 Conn conn;
 Dgram dgram;
+File file_handle;
 
 #define MTU_MAX 32000
 Server::Server() : socket_p(-1){};
@@ -55,13 +59,15 @@ void Server::server_bind(struct sockaddr_in &srv_addr, const int& port){
     }
 }
 
-void Server::server_send_ack(struct sockaddr_in &client_addr, uint16_t seq_num, const socklen_t &addr_len){
+void Server::server_send_ack(struct sockaddr_in &client_addr, uint32_t seq_num, const socklen_t &addr_len){
     std::vector<uint8_t> ack_packet = dgram.encode_ack_packet(seq_num);
     int bytes_sent = sendto(socket_p, ack_packet.data(), ack_packet.size(), 0, (struct sockaddr*)&client_addr, addr_len);
     if(bytes_sent < 0){
         close(socket_p);
         throw std::runtime_error(std::string("Server bytes sent failed: ") + std::string(strerror(errno)));
     }
+    std::cout<<"sent ack packet to client"<<std::endl;
+    return;
 }
 
 void Server::server_recv(const int& droppc){
@@ -90,23 +96,31 @@ void Server::server_recv(const int& droppc){
 
         // creating Client profile (clientState struct) for new/existing client
         if(buffer[0] == META_FLAG){
-            std::pair<uint16_t, std::string> meta_data = dgram.decode_meta_packet(buffer);
+            std::cout<<"META PACKET"<<std::endl;
+            std::pair<uint32_t, std::string> meta_data = dgram.decode_meta_packet(buffer);
             conn.addClient(client_ip, client_port, meta_data.second, meta_data.first);
-            server_send_ack(client_addr, 0, addr_len); // send ack for meta (no sequence num needed)
+            server_send_ack(client_addr, 0, addr_len); // send ack for meta (sequence num is 0)
+
+            Conn::ClientState& clientDebug = conn.getClientState(client_ip, client_port);
+            std::cout<<"Client's output file: "<<clientDebug.filePath<<std::endl;
+            std::cout<<"Client's window size: "<<static_cast<int>(clientDebug.winSize)<<std::endl;
+            std::cout<<"---------------"<<std::endl;
+            continue;
+        }
+        
+        Conn::ClientState& clientState = conn.getClientState(client_ip, client_port);
+        if(buffer[0] == FIN_FLAG){
+            std::cout<<"TERMINATING"<<std::endl;
+            uint32_t fin_seq_num = dgram.decode_fin_packet(buffer);
+            server_send_ack(client_addr, fin_seq_num, addr_len);
+            clientState.write_pos = file_handle.file_write_stream(clientState.filePath, clientState.buffer, clientState.write_pos);
+            conn.removeClient(client_ip, client_port);
             continue;
         }
 
-        if(buffer[0] == FIN_FLAG){
-            server_send_ack(client_addr, 0, addr_len); // send ack for meta (no sequence num needed)
-            // TODO: write whatever is left in map (since the client doesn't have anything left to provide)
-                // delete clientState and its place in the client tracking map
-            std::cout<<"FIN_FLAG"<<std::endl; 
-        }
-
         //else data packet
-        //data packets: [0]:flag; [1-2]:seq_num; [3-end]: data-body
-        uint16_t seq_num = dgram.decode_bytes(std::vector<uint8_t>(buffer.begin() + 1, buffer.begin() + 3));
-        Conn::ClientState& clientState = conn.getClientState(client_ip, client_port);
+        //data packets: [0]:flag; [1-4]:seq_num; [5-end]: data-body
+        uint32_t seq_num = dgram.decode_bytes(std::vector<uint8_t>(buffer.begin() + 1, buffer.begin() + 5));
         
         // ACK lost in response to client, don't duplicate -> resend ACK
         if(clientState.buffer.find(seq_num) != clientState.buffer.end()){
@@ -118,15 +132,16 @@ void Server::server_recv(const int& droppc){
                 continue; // accept new packets (back to top)
             }else{
                 // else store into clientState map and send ACK
-                clientState.buffer[seq_num] = std::vector<uint8_t>(&buffer[3], &buffer[bytes_read - 3]);
+                clientState.buffer[seq_num] = std::vector<uint8_t>(buffer.begin() + 5, buffer.end());
                 server_send_ack(client_addr, seq_num, addr_len);
             }
         }
         if(clientState.buffer.size() == clientState.winSize){
             std::cout<<"MOVING WINDOW"<<std::endl;
-            //TODO: write file function
+            clientState.write_pos = file_handle.file_write_stream(clientState.filePath, clientState.buffer, clientState.write_pos);
+            clientState.base_seq_num = std::prev(clientState.buffer.end())->first + 1; // Get the last key
             clientState.buffer.clear();
-            continue; // remove once writing function works
+            continue;
         }
     }
 }
