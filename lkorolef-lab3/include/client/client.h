@@ -23,15 +23,14 @@ public:
         uint32_t sequence_num;
         std::vector<uint8_t> data_body;
     };
-    
+    std::string getCurrentRFC3339Time();
+    void printLogLine(const std::string&, const std::string&, uint32_t);
     void socket_init();
     void client_send_packet(struct sockaddr_in&, 
                                 int,
                                 uint32_t, 
                                 std::vector<uint8_t>, 
                                 const socklen_t&);
-    // void client_send_data(struct sockaddr_in&, uint32_t, std::vector<uint8_t>, const socklen_t&);
-    // void set_client_info(struct sockaddr_in&, uint32_t, std::vector<uint8_t>, const socklen_t&);
     void waitForAck(struct sockaddr_in&, socklen_t);
     void client_communicate(const char*,
                     const int&,

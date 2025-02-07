@@ -15,6 +15,6 @@
 class File{
 public:
     std::pair<std::vector<uint8_t>, int> file_read_stream(std::string, int, int);
-    int file_write_stream(const std::string&, const std::map<uint32_t, std::vector<uint8_t>>&, int);
+    int file_write_stream(const std::string&, const std::map<uint32_t, std::vector<uint8_t>>&);
 };
 #endif

@@ -19,16 +19,15 @@ public:
     ~Conn();
 
     struct ClientState{
-        //std::ofstream outFile; //no need maybe? just send file path to future writefile function
         std::string filePath; //output filepath
         uint32_t winSize;
-        int write_pos; //saved write position for each file
         uint32_t base_seq_num; // starting window seq_num position
+        uint32_t expected_seq_num;
         //[seq_num] -> data 
         std::map<uint32_t, std::vector<uint8_t>> buffer;
 
         ClientState(const std::string& path = "", uint32_t init = 0, int pos = 0)
-            : filePath(path), winSize(init), write_pos(pos), base_seq_num(init){}
+            : filePath(path), winSize(init), base_seq_num(init), expected_seq_num(init){}
     };
 
     void addClient(const std::string&, uint16_t, const std::string&, uint32_t);

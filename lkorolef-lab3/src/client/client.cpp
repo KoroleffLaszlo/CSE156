@@ -29,20 +29,23 @@
 #define META_FLAG 0
 #define DATA_FLAG 1
 #define ACK_FLAG 2
-#define FIN_FLAG 3 // terminating packet
-
-constexpr int TIMEOUT_MS = 100; // 100ms timeout for select() 
+#define FIN_FLAG 3
+#define TRANS_FLAG 4 // transmission flag
 
 Dgram dgram;
 File file_handle;
 
-std::map<uint32_t, std::pair<std::vector<uint8_t>, std::chrono::steady_clock::time_point>> packet_window;
+std::map<uint32_t, std::vector<uint8_t>> packet_window; // Stores packets without timestamps
 
 Client::Client() : socket_p(-1){};
 
 Client::~Client(){
     if(socket_p >= 0) close(socket_p);
 }
+
+uint32_t base_seq = 0;
+uint32_t next_seq = 0;
+int win = 0;
 
 void Client::socket_init(){
     struct timeval timeout;
@@ -62,147 +65,163 @@ void Client::socket_init(){
     }
 }
 
+void Client::printLogLine(const std::string& timestamp, const std::string& type, uint32_t pkt_sn){
+    std::cout << timestamp << ", " << type << ", " << pkt_sn << ", "
+              << base_seq << ", " << next_seq << ", " << (base_seq + win) << std::endl;
+}
+
+std::string Client::getCurrentRFC3339Time(){
+    std::time_t now = std::time(nullptr);
+    std::tm* utcTime = std::gmtime(&now); // Convert to UTC
+
+    char buffer[30];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S.000Z", utcTime);
+    return std::string(buffer);
+}
+
 void Client::client_send_packet(struct sockaddr_in &srv_addr, 
                                 int p_flag,
                                 uint32_t seq_num, 
                                 std::vector<uint8_t> data, 
-                                const socklen_t &addr_len){
-    if(p_flag == META_FLAG || p_flag == FIN_FLAG){
+                                const socklen_t &addr_len) {
+    
+    std::string timestamp = getCurrentRFC3339Time();
+    if (p_flag == META_FLAG || p_flag == FIN_FLAG) {
         sendto(socket_p, data.data(), data.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
-        packet_window[seq_num] = {data, std::chrono::steady_clock::now()};
-    }else{ //DATA_FLAG
+        packet_window[seq_num] = data;  // Store only packet data (no timer)
+    } else {  // DATA_FLAG
         std::vector<uint8_t> packet = dgram.encode_data_packet(seq_num, data);
-        std::cout<<"Sent Data - Sequence Number : "<< seq_num << std::endl;
         sendto(socket_p, packet.data(), packet.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
-        packet_window[seq_num] = {packet, std::chrono::steady_clock::now()};
+        packet_window[seq_num] = packet;  // Store only packet data (no timer)
     }
+    printLogLine(timestamp, "DATA", seq_num);
     return;
 }
 
-// void Client::client_send_data(struct sockaddr_in &srv_addr, uint32_t seq_num, std::vector<uint8_t> data, const socklen_t &addr_len){
-//     std::vector<uint8_t> packet = dgram.encode_data_packet(seq_num, data);
-//     std::cout<<"Sent Data - Sequence Number : "<< seq_num << std::endl;
-//     sendto(socket_p, packet.data(), packet.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
-//     packet_window[seq_num] = {packet, std::chrono::steady_clock::now()};
-//     return;
-// }
 
-// void Client::set_client_info(struct sockaddr_in &srv_addr, uint32_t seq_num, std::vector<uint8_t> packet, const socklen_t &addr_len){
-//     sendto(socket_p, packet.data(), packet.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
-//     packet_window[seq_num] = {packet, std::chrono::steady_clock::now()};
-//     return;
-// }
-
-void Client::waitForAck(struct sockaddr_in &srv_addr, socklen_t addr_len){
-    fd_set read_fds;
-    struct timeval select_timeout;
+void Client::waitForAck(struct sockaddr_in &srv_addr, socklen_t addr_len) {
     std::map<uint32_t, int> retransmission_count;  // Track retransmission attempts
 
-    while(!packet_window.empty()){  // Exit only when all packets are acknowledged
-        FD_ZERO(&read_fds);
-        FD_SET(socket_p, &read_fds);
+    while (!packet_window.empty()) {  // Exit only when all packets are acknowledged
+        std::string timestamp = getCurrentRFC3339Time();
+        std::vector<uint8_t> ack_buffer(MTU_MAX);
+        int bytes_received = recvfrom(socket_p, ack_buffer.data(), ack_buffer.size(), 0, 
+                                      (struct sockaddr*)&srv_addr, &addr_len);
 
-        select_timeout.tv_sec = 0;
-        select_timeout.tv_usec = 50 * 1000;  // 50ms timeout for checking ACKs
-
-        int active = select(socket_p + 1, &read_fds, nullptr, nullptr, &select_timeout);
-
-        if(active > 0 && FD_ISSET(socket_p, &read_fds)){
-            std::vector<uint8_t> ack_buffer(MTU_MAX);
-            int bytes_received = recvfrom(socket_p, ack_buffer.data(), ack_buffer.size(), 0, (struct sockaddr*)&srv_addr, &addr_len);
-            ack_buffer.resize(bytes_received);
-
-            uint32_t sequence_num = dgram.decode_ack_packet(ack_buffer);
-
-            if(packet_window.count(sequence_num)){
-                std::cout << "Received ACK for packet - " << sequence_num << std::endl;
-                packet_window.erase(sequence_num);
-                retransmission_count.erase(sequence_num);
+        if (bytes_received < 0) {
+            if (errno == EWOULDBLOCK || errno == EAGAIN) {
+                std::cerr << "Timeout: No response from server for 30 seconds. Exiting with return code 3." << std::endl;
+                exit(3);
+            } else {
+                std::cerr << "Error receiving ACK/TRANS packet: " << strerror(errno) << std::endl;
+                exit(3);
             }
         }
 
-        // retransmit unACKed packets
-        auto now = std::chrono::steady_clock::now();
-        for (auto it = packet_window.begin(); it != packet_window.end();) {
-            uint32_t seq_num = it->first;
-            auto &packet_info = it->second;
+        ack_buffer.resize(bytes_received);
+        uint8_t flag = ack_buffer[0];  // First byte is flag
+        uint32_t sequence_num = dgram.decode_ack_packet(ack_buffer);
 
-            if (now - packet_info.second > std::chrono::milliseconds(TIMEOUT_MS)) {
-                retransmission_count[seq_num]++;
-
-                if (retransmission_count[seq_num] > 5) {
-                    std::cerr << "Packet " << seq_num << " lost after 5 retransmissions. Exiting with return code 4." << std::endl;
+        if(flag == ACK_FLAG){
+            if (packet_window.count(sequence_num)) {
+                packet_window.erase(sequence_num);
+                retransmission_count.erase(sequence_num);
+                printLogLine(timestamp, "ACK", sequence_num);
+            }
+        } 
+        else if(flag == TRANS_FLAG){
+            if (packet_window.count(sequence_num)) {
+                retransmission_count[sequence_num]++;
+                if (retransmission_count[sequence_num] > 5) {
+                    //std::cerr << "Packet " << sequence_num << " lost after 5 retransmissions. Exiting with return code 4." << std::endl;
                     exit(4);
                 }
-                // MAKE SURE DATA CONTAINS FLAGS AND SEQUENCE NUMBERS
-                sendto(socket_p, packet_info.first.data(), packet_info.first.size(), 0, (struct sockaddr*)&srv_addr, sizeof(srv_addr));
-                std::cout << "Retransmitted Packet " << seq_num << " (Attempt " << retransmission_count[seq_num] << "/5)" << std::endl;
-
-                packet_info.second = now;
+                // Retrieve packet data and resend
+                auto &packet_data = packet_window[sequence_num];
+                sendto(socket_p, packet_data.data(), packet_data.size(), 0, 
+                       (struct sockaddr*)&srv_addr, sizeof(srv_addr));
             }
-            ++it;
         }
     }
 }
 
-// sends winsz number of packets of data size mss, receives ACK
 void Client::client_communicate(const char *srv_ip, 
-                        const int &srv_port, 
-                        const uint32_t &winsz, 
-                        const int &mss, 
-                        const std::string &input_file,
-                        const std::string &output_file){
+                                const int &srv_port, 
+                                const uint32_t &winsz, 
+                                const int &mss, 
+                                const std::string &input_file,
+                                const std::string &output_file) {
+    win = winsz;
     struct sockaddr_in srv_addr;
     memset(&srv_addr, 0, sizeof(srv_addr));
     srv_addr.sin_family = AF_INET;
     srv_addr.sin_port = htons(srv_port);
+
     if(inet_pton(AF_INET, srv_ip, &srv_addr.sin_addr) <= 0){
         close(socket_p);
         throw std::runtime_error("Invalid server IP address");
     }
+
     socklen_t addr_len = sizeof(srv_addr);
-
     uint32_t seq_num = 0;
+    base_seq = 0;
+    next_seq = seq_num + 1;
 
-    // send metadata packet
+    struct timeval recv_timeout = {30, 0};  
+    if (setsockopt(socket_p, SOL_SOCKET, SO_RCVTIMEO, &recv_timeout, sizeof(recv_timeout)) < 0) {
+        std::cerr << "Error setting recv timeout: " << strerror(errno) << std::endl;
+        exit(1);
+    }
+
+    // sendto timeout 3sec
+    struct timeval send_timeout = {3, 0};  
+    if (setsockopt(socket_p, SOL_SOCKET, SO_SNDTIMEO, &send_timeout, sizeof(send_timeout)) < 0) {
+        std::cerr << "Error setting send timeout: " << strerror(errno) << std::endl;
+        exit(1);
+    }
+
+    // metadata pack
     std::vector<uint8_t> meta_packet = dgram.encode_meta_packet(winsz, output_file);
     client_send_packet(srv_addr, META_FLAG, seq_num, meta_packet, addr_len);
-    waitForAck(srv_addr, seq_num);
+    waitForAck(srv_addr, addr_len);
     seq_num++;
+    next_seq++;
     int read_pos = 0;
 
     // send data packets
-    while(true){
-        packet_window.clear();  // Clear previous batch
-        for (uint32_t i = 0; i < winsz; i++) {
+    while (true) {
+        packet_window.clear(); 
+        for(uint32_t i = 0; i < winsz; i++){
             std::pair<std::vector<uint8_t>, int> file_read_ret = file_handle.file_read_stream(input_file, mss, read_pos);
-            std::vector<uint8_t>data_chunk = file_read_ret.first;
-            std::cout<<"seq_num: "<<seq_num << "Chunk: ";
-            std::cout<<"[";
-            for(size_t i = 0; i < data_chunk.size(); i++){
-                std::cout<<(char)data_chunk[i];
-            }
-            std::cout<<"]"<<std::endl;
-            if (data_chunk.size() == 0){
-                std::cout<<"no data to read"<<std::endl;
+            std::vector<uint8_t> data_chunk = file_read_ret.first;
+            if(data_chunk.empty()){
                 read_pos = -1;
                 break;
             }
             read_pos += file_read_ret.second;
+
+            // Store packet in `packet_window`
+            packet_window[seq_num] = data_chunk;
+
+            // Send the packet
             client_send_packet(srv_addr, DATA_FLAG, seq_num, data_chunk, addr_len);
-            sleep(3);
+            //sleep(5); // debugging
             seq_num++;
+            next_seq++;
         }
-        waitForAck(srv_addr, addr_len);  // Wait for all ACKs before sending the next batch
-        if (packet_window.empty() && (read_pos < 0)){
+
+        // Wait for ACKs before sending the next batch
+        waitForAck(srv_addr, addr_len);
+        base_seq = base_seq + next_seq;
+        // Exit when all packets are acknowledged and EOF is reached
+        if(packet_window.empty() && (read_pos < 0)){
             break;
         }
     }
 
-    // **Step 3: Send FIN_FLAG Packet and Wait for ACK**
+    // send FIN packet
     seq_num++;
     std::vector<uint8_t> fin_payload = dgram.encode_fin_packet(seq_num);
     client_send_packet(srv_addr, FIN_FLAG, seq_num, fin_payload, addr_len);
     waitForAck(srv_addr, addr_len);
-    return;
 }

@@ -75,7 +75,6 @@ uint32_t Dgram::decode_ack_packet(std::vector<uint8_t>ack_packet){
 std::vector<uint8_t> Dgram::encode_fin_packet(uint32_t seq_num){
     std::vector<uint8_t>fin_packet = encode_bytes(seq_num);
     fin_packet.insert(fin_packet.begin(), static_cast<uint8_t>(FIN_FLAG));
-    std::cout<<"ENCODING FIN PACKET"<<std::endl;
     return fin_packet;
 }
 
