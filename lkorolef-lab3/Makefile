@@ -1,5 +1,6 @@
 CC = g++
-CFLAG = -Wall -Werror -g -I$(IDIR)
+CFLAG = -Wall -Werror -g -std=c++17 -I$(IDIR)
+LDFLAGS = -lstdc++fs  # Add this if your compiler requires explicit linking for filesystem
 
 BDIR = bin
 ODIR = build
@@ -37,16 +38,16 @@ $(ODIR)/client/%.o: $(SDIR)/client/%.cpp | dir
 	$(CC) -c -o $@ $< $(CFLAG)
 
 $(TARGET_S): $(OBJ_S) | dir
-	$(CC) -o $@ $^ $(CFLAG)
+	$(CC) -o $@ $^ $(CFLAG) $(LDFLAGS) 
 
 $(TARGET_C): $(OBJ_C) | dir
-	$(CC) -o $@ $^ $(CFLAG)
+	$(CC) -o $@ $^ $(CFLAG) $(LDFLAGS)
 
 all:  $(TARGET_S) $(TARGET_C)
 
 .PHONY: all dir clean
 
-dir: # TODO: add client obj directory
+dir:
 	@mkdir -p $(BDIR) $(ODIR)/common $(ODIR)/server $(ODIR)/client
 
 clean:

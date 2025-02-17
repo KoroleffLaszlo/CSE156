@@ -18,8 +18,7 @@ private:
 public:
     Server();
     ~Server();
-    std::string getCurrentRFC3339Time();
-    void printLogLine(const std::string&, const std::string&, uint32_t);
+    void logPacketEvent(const std::string&, uint32_t);
     bool should_drop();
     void socket_init();
     void server_bind(struct sockaddr_in&, const int&);

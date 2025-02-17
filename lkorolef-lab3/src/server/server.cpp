@@ -44,9 +44,18 @@ Server::~Server(){
     if(socket_p >= 0) close(socket_p);
 }
 
-void Server::printLogLine(const std::string &timestamp, const std::string &type, uint32_t pkt_sn) {
+void Server::logPacketEvent(const std::string &type, uint32_t pkt_sn){
+    std::time_t now = std::time(nullptr);
+    std::tm* utcTime = std::gmtime(&now);
+    
+    char buffer[30];
+    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S.000Z", utcTime);
+    std::string timestamp(buffer);
+
+    // Print log entry
     std::cout << timestamp << ", " << type << ", " << pkt_sn << std::endl;
 }
+
 
 double drop_rate;
 int total_packets_processed = 0;
@@ -61,14 +70,6 @@ bool Server::should_drop(){
         return true;
     }
     return false;
-}
-
-std::string Server::getCurrentRFC3339Time() {
-    std::time_t now = std::time(nullptr);
-    std::tm* utcTime = std::gmtime(&now); // Convert to UTC
-    char buffer[30];
-    std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S.000Z", utcTime);
-    return std::string(buffer);
 }
 
 void Server::socket_init(){
@@ -101,9 +102,8 @@ void Server::retransmission(struct sockaddr_in &client_addr, uint32_t seq_num, c
     return;
 }
 void Server::server_send_ack(struct sockaddr_in &client_addr, uint32_t seq_num, const socklen_t &addr_len, int droppc){
-    std::string timestamp = getCurrentRFC3339Time();
     if(should_drop()){
-        printLogLine(timestamp, "DROP ACK", seq_num);
+        logPacketEvent("DROP ACK", seq_num);
         retransmission(client_addr, seq_num, addr_len);
         return;
     }
@@ -113,7 +113,7 @@ void Server::server_send_ack(struct sockaddr_in &client_addr, uint32_t seq_num, 
         close(socket_p);
         throw std::runtime_error(std::string("Server bytes sent failed: ") + std::string(strerror(errno)));
     }
-    printLogLine(timestamp, "ACK", seq_num);
+    logPacketEvent("ACK", seq_num);
     return;
 }
 
@@ -135,12 +135,11 @@ void Server::server_recv(const int& droppc){
 
         std::string client_ip = inet_ntoa(client_addr.sin_addr);
         uint16_t client_port = ntohs(client_addr.sin_port);
-        std::string timestamp = getCurrentRFC3339Time();
 
         // creating Client profile (clientState struct) for new/existing client
         if(buffer[0] == META_FLAG){
             if(should_drop()){
-                printLogLine(timestamp, "DROP DATA", static_cast<uint32_t>(0));
+                logPacketEvent("DROP DATA", static_cast<uint32_t>(0));
                 retransmission(client_addr, 0, addr_len);
                 continue;
             }
@@ -157,12 +156,12 @@ void Server::server_recv(const int& droppc){
         uint32_t seq_num = dgram.decode_bytes(std::vector<uint8_t>(buffer.begin() + 1, buffer.begin() + 5));
 
         if(should_drop()){
-            printLogLine(timestamp, "DROP DATA", seq_num);
+            logPacketEvent("DROP DATA", seq_num);
             retransmission(client_addr, seq_num, addr_len);
             continue;
         }
 
-        printLogLine(timestamp, "DATA", seq_num);
+        logPacketEvent("DATA", seq_num);
 
         if(buffer[0] == FIN_FLAG){
             uint32_t fin_seq_num = dgram.decode_fin_packet(buffer);

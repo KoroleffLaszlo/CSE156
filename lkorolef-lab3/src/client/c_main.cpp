@@ -21,12 +21,17 @@ Client client;
 int main(int argc, char* argv[]){
     if(argc != 7){
         std::cerr << "Incorrect number of arguments" << std::endl;
-        return EXIT_SUCCESS;
+        return EXIT_FAILURE;
     }
     char* srv_ip = argv[1];
     int srv_port = std::stoi(argv[2]);
     int mss = std::stoi(argv[3]);
     uint32_t winsz = static_cast<uint32_t>(std::stoi(argv[4]));
+    if(mss<10 || winsz <= 0){
+        std::cerr << "Incorrect argument values" << std::endl;
+        return EXIT_FAILURE;
+    }
+    
     std::string input_file = argv[5];
     std::string output_file = argv[6];
     
@@ -40,6 +45,7 @@ int main(int argc, char* argv[]){
                                     output_file);
     }catch(const std::exception &e){
         std::cerr<<"Error: "<< e.what() <<std::endl;
+        return EXIT_FAILURE;
     }
     
     return EXIT_SUCCESS;

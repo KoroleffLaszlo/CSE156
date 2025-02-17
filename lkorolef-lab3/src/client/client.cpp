@@ -65,18 +65,21 @@ void Client::socket_init(){
     }
 }
 
-void Client::printLogLine(const std::string& timestamp, const std::string& type, uint32_t pkt_sn){
-    std::cout << timestamp << ", " << type << ", " << pkt_sn << ", "
-              << base_seq << ", " << next_seq << ", " << (base_seq + win) << std::endl;
-}
-
-std::string Client::getCurrentRFC3339Time(){
+void Client::logPacketEvent(const std::string& type, uint32_t pkt_sn){
+    // Get current timestamp in RFC 3339 format
     std::time_t now = std::time(nullptr);
-    std::tm* utcTime = std::gmtime(&now); // Convert to UTC
+    std::tm* utcTime = std::gmtime(&now); 
 
     char buffer[30];
     std::strftime(buffer, sizeof(buffer), "%Y-%m-%dT%H:%M:%S.000Z", utcTime);
-    return std::string(buffer);
+    std::string timestamp(buffer);
+
+    // Prepare log entry
+    std::string log_entry = timestamp + ", " + type + ", " + std::to_string(pkt_sn) + ", " +
+                            std::to_string(base_seq) + ", " + std::to_string(next_seq) + ", " +
+                            std::to_string(base_seq + win) + "\n";
+
+    std::cout << log_entry;
 }
 
 void Client::client_send_packet(struct sockaddr_in &srv_addr, 
@@ -85,7 +88,6 @@ void Client::client_send_packet(struct sockaddr_in &srv_addr,
                                 std::vector<uint8_t> data, 
                                 const socklen_t &addr_len) {
     
-    std::string timestamp = getCurrentRFC3339Time();
     if (p_flag == META_FLAG || p_flag == FIN_FLAG) {
         sendto(socket_p, data.data(), data.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
         packet_window[seq_num] = data;  // Store only packet data (no timer)
@@ -94,7 +96,7 @@ void Client::client_send_packet(struct sockaddr_in &srv_addr,
         sendto(socket_p, packet.data(), packet.size(), 0, (struct sockaddr*)&srv_addr, addr_len);
         packet_window[seq_num] = packet;  // Store only packet data (no timer)
     }
-    printLogLine(timestamp, "DATA", seq_num);
+    logPacketEvent("DATA", seq_num);
     return;
 }
 
@@ -103,7 +105,6 @@ void Client::waitForAck(struct sockaddr_in &srv_addr, socklen_t addr_len) {
     std::map<uint32_t, int> retransmission_count;  // Track retransmission attempts
 
     while (!packet_window.empty()) {  // Exit only when all packets are acknowledged
-        std::string timestamp = getCurrentRFC3339Time();
         std::vector<uint8_t> ack_buffer(MTU_MAX);
         int bytes_received = recvfrom(socket_p, ack_buffer.data(), ack_buffer.size(), 0, 
                                       (struct sockaddr*)&srv_addr, &addr_len);
@@ -126,7 +127,7 @@ void Client::waitForAck(struct sockaddr_in &srv_addr, socklen_t addr_len) {
             if (packet_window.count(sequence_num)) {
                 packet_window.erase(sequence_num);
                 retransmission_count.erase(sequence_num);
-                printLogLine(timestamp, "ACK", sequence_num);
+                logPacketEvent("ACK", sequence_num);
             }
         } 
         else if(flag == TRANS_FLAG){
