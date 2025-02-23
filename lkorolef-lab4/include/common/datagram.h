@@ -13,13 +13,6 @@
 
 class Dgram{
 public:
-    struct dgram_t{ // client package datagram
-        uint32_t seq_num;
-        std::vector<uint8_t> data_body;
-
-        dgram_t(uint32_t seq, const std::vector<uint8_t>& data)
-            : seq_num(seq), data_body(data) {}
-    };
 
     std::vector<uint8_t> encode_bytes(uint32_t);
     uint32_t decode_bytes(std::vector<uint8_t>);

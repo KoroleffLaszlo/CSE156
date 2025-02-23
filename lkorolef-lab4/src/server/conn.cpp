@@ -23,20 +23,13 @@ bool Conn::clientExists(const std::string& ip, uint16_t port) const{
     return clients.find(clientKey) != clients.end();
 }
 
-// return const ClientState struct for specific client
-const Conn::ClientState& Conn::getClientState(const std::string& ip, uint16_t port) const{
+Conn::ClientState* Conn::getClientState(const std::string& ip, uint16_t port){
     auto clientKey = std::make_pair(ip, port);
     auto check = clients.find(clientKey);
-    static const ClientState emptyState;
-    return (check != clients.end()) ? check->second : emptyState;
-}
-
-// pass by value
-Conn::ClientState& Conn::getClientState(const std::string& ip, uint16_t port){
-    auto clientKey = std::make_pair(ip, port);
-    auto check = clients.find(clientKey);
-    static ClientState emptyState;
-    return (check != clients.end()) ? check->second : emptyState;
+    if(check != clients.end()){
+        return &check->second; // return pointer to existing client state
+    }
+    return nullptr; // client not found
 }
 
 void Conn::removeClient(const std::string& ip, uint16_t port){
@@ -44,7 +37,7 @@ void Conn::removeClient(const std::string& ip, uint16_t port){
     clients.erase(clientKey);
 }
 
-const std::string Conn:getClientFile(const std::string& ip, uint16_t port){
-    ClientState client = getClientState(ip, port);
-    return client.filePath;
+std::string Conn::getClientFile(const std::string& ip, uint16_t port){
+    ClientState *client = getClientState(ip, port);
+    return client->filePath;
 }

@@ -10,8 +10,7 @@
 #include <fstream>
 #include <map>
 #include <utility>
-#include <mutex>
-#include <thread>
+#include <memory>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -23,6 +22,7 @@ public:
 
     struct ClientState{
         std::string filePath; //output filepath
+        std::unique_ptr<std::ofstream> fileStream;
         uint32_t winSize;
         uint32_t base_seq_num; // starting window seq_num position
         uint32_t expected_seq_num;
@@ -35,8 +35,7 @@ public:
 
     void addClient(const std::string&, uint16_t, const std::string&, uint32_t);
     bool clientExists(const std::string&, uint16_t) const;
-    const ClientState& getClientState(const std::string&, uint16_t) const;
-    ClientState& getClientState(const std::string&, uint16_t);
+    Conn::ClientState* getClientState(const std::string&, uint16_t);
     void removeClient(const std::string&, uint16_t);
     std::string getClientFile(const std::string&, uint16_t);
 

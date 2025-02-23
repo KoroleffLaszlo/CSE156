@@ -29,6 +29,12 @@ int main(int argc, char* argv[]){
     struct sockaddr_in srv_addr;
     int srv_port = std::stoi(argv[1]);
     int droppc = std::stoi(argv[2]);
+    std::string rootPath(argv[3]);
+
+    if(srv_port < 0){
+        std::cerr<<"Invalid port number"<<std::endl;
+        return EXIT_FAILURE;
+    }
     if(droppc > 100 || droppc < 0){
         std::cerr<<"Invalid packet drop member"<<std::endl;
         return EXIT_FAILURE;
@@ -36,7 +42,7 @@ int main(int argc, char* argv[]){
     try{
         server.socket_init();
         server.server_bind(srv_addr, srv_port);
-        server.server_recv(droppc);
+        server.server_recv(droppc, rootPath);
     }catch(const std::exception &e){
         std::cerr<<"Error: "<< e.what() <<std::endl;
         return EXIT_FAILURE;
