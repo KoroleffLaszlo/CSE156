@@ -20,6 +20,15 @@ public:
     Client();
     ~Client();
 
+    struct client_info{ //used for thread safety in main()
+        char* ip_str;
+        int port_num;
+        uint32_t winsz;
+        int mss;
+        std::string input_file;
+        std::string output_file;
+    };
+
     struct packet_t{ // client package datagram
         uint32_t seq_num;
         std::vector<uint8_t> data_body;
@@ -40,7 +49,7 @@ public:
     };
 
     void socket_init();
-    void client_communicate(const char*,
+    int client_communicate(const char*,
                     const int&,
                     const uint32_t&,
                     const int&,

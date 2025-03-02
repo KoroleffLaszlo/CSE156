@@ -29,8 +29,8 @@ public:
         //[seq_num] -> data 
         std::map<uint32_t, std::vector<uint8_t>> buffer;
 
-        ClientState(const std::string& path = "", uint32_t init = 0, int pos = 0)
-            : filePath(path), winSize(init), base_seq_num(init), expected_seq_num(init){}
+        ClientState(const std::string& path = "", uint32_t init = 0)
+            : filePath(path), winSize(init), base_seq_num(0), expected_seq_num(0){}
     };
 
     void addClient(const std::string&, uint16_t, const std::string&, uint32_t);

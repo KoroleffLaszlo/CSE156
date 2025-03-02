@@ -82,3 +82,10 @@ uint32_t Dgram::decode_fin_packet(std::vector<uint8_t>fin_packet){
     uint32_t seq_num = decode_bytes(std::vector<uint8_t>(fin_packet.begin() + 1, fin_packet.end()));
     return seq_num;
 }
+
+std::pair<uint8_t, uint32_t> Dgram::decode_response(std::vector<uint8_t> ack_packet){ // used specifically for fin/meta packets
+    uint8_t flag = ack_packet[0];  // First byte is the flag (ACK or FILE_LOCK)
+    uint32_t seq_num = decode_bytes(std::vector<uint8_t>(ack_packet.begin() + 1, ack_packet.end()));
+
+    return {flag, seq_num};  // Return flag and sequence number as a pair
+}

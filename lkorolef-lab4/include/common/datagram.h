@@ -23,5 +23,6 @@ public:
     uint32_t decode_ack_packet(std::vector<uint8_t>);
     std::vector<uint8_t> encode_fin_packet(uint32_t);
     uint32_t decode_fin_packet(std::vector<uint8_t>);
+    std::pair<uint8_t, uint32_t> decode_response(std::vector<uint8_t>);
 };
 #endif

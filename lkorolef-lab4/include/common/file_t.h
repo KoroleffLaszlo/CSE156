@@ -17,6 +17,6 @@ class File{
 public:
     std::unique_ptr<std::ofstream> open_file_stream(const std::string&);
     std::pair<std::vector<uint8_t>, int> file_read_stream(std::string, int, int);
-    int file_write_stream(std::ofstream&, const std::map<uint32_t, std::vector<uint8_t>>&);
+    int file_write_stream(std::ofstream&, const std::vector<uint8_t>&);
 };
 #endif

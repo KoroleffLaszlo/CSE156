@@ -18,7 +18,6 @@
 #include <fcntl.h>
 #include <errno.h>  
 
-
 #include "../../include/common/file_t.h"
 
 #define LOCK_FLAG 5
@@ -44,7 +43,6 @@ namespace{ // specific functions only used by file_t
 
 std::unique_ptr<std::ofstream> File::open_file_stream(const std::string& filePath){
     std::filesystem::path path(filePath);
-    // Ensure parent directories exist
     if(!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()){
         std::error_code err;
         if(!std::filesystem::create_directories(path.parent_path(), err)){
@@ -87,17 +85,13 @@ std::pair<std::vector<uint8_t>, int> File::file_read_stream(std::string filePath
     return {buffer, static_cast<int>(bytesRead)};
 }
 
-int File::file_write_stream(std::ofstream& file, 
-                            const std::map<uint32_t, std::vector<uint8_t>>& buffer){
+
+int File::file_write_stream(std::ofstream& file, const std::vector<uint8_t>& data) {
     if(!file.is_open()){
         throw std::runtime_error("Failed to write to file. Invalid file stream");
     }
-
-    // Write the entire buffer to the file
-    for(const auto& [key, data] : buffer){
-        if (!file.write(reinterpret_cast<const char*>(data.data()), data.size())) {
-            throw std::runtime_error("Error writing to file.");
-        }
+    if(!file.write(reinterpret_cast<const char*>(data.data()), data.size())){
+        throw std::runtime_error("Error writing to file.");
     }
     return 0; // success
 }
