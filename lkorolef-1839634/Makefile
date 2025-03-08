@@ -10,15 +10,15 @@ SDIR = src
 TARGET_S = $(BDIR)/myproxy
 
 # universally used dependents 
-_OBJ_U = datagram.o file_t.o
+_OBJ_U = file_wrap.o datagram.o
 OBJ_U = $(patsubst %, $(ODIR)/common/%, $(_OBJ_U))
-_DEPS_U = datagram.h file_t.h
+_DEPS_U = file_wrap.h datagram.o
 DEPS_U = $(patsubst %, $(IDIR)/common/%, $(_DEPS_U))
 
-_OBJ_S = server.o s_main.o conn.o
+_OBJ_S = server.o main.o
 OBJ_S = $(patsubst %, $(ODIR)/server/%, $(_OBJ_S)) $(OBJ_U)
-_DEPS_S = server.h conn.h
-DEPS_S = $(patsubst %, $(IDIR)/server/%, $(_DEPS_S))  $(DEPS_U)
+_DEPS_S = server.h
+DEPS_S = $(patsubst %, $(IDIR)/server/%, $(_DEPS_S)) $(DEPS_U)
 
 .DEFAULT_GOAL := all
 

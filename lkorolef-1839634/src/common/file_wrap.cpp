@@ -1,15 +1,14 @@
+#include "../../include/common/file_wrap.h"
+
 #include <iostream>
 #include <string>
 #include <cstring>
 #include <cerrno>
 #include <cstdint>
 #include <fstream>
-#include <bitset>
 #include <filesystem>
 #include <errno.h>  
 #include <unordered_set>
-
-#include "../../include/common/file_wrap.h"
 
 namespace Helper{
     // removes leading and tailing whitespaces
@@ -21,6 +20,7 @@ namespace Helper{
 }
 
 // returns unordered_set containing forbidden domains (for faster look-up)
+// TODO: make file if not exist
 std::unordered_set<std::string> File::file_read_stream(const std::string& filePath){
     std::ifstream file(filePath);
     if(!file){
@@ -38,7 +38,7 @@ std::unordered_set<std::string> File::file_read_stream(const std::string& filePa
     return entries;
 }
 
-
+// TODO: make file if not exist
 int File::file_write_stream(std::ofstream& file, const std::vector<uint8_t>& data) {
     if(!file.is_open()){
         throw std::runtime_error("Failed to write to file. Invalid file stream");

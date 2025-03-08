@@ -7,7 +7,11 @@
 #include <string>
 #include <cstring>
 #include <cstdint>
-#include <fstream>
+#include <memory>
+#include <unordered_set>
+#include <mutex>
+#include <shared_mutex>
+#include <atomic>
 
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -22,19 +26,23 @@ public:
     struct Connection { // maintains cross communication tracking
         int client_fd;
         int d_server_fd; // destination server port
-        std::string request; // client request
+        std::string client_ip;
+        std::string request; // client request -> "GET http://ucsc.edu/ HTTP/1.1"
         std::string response; // destination server response
 
-        Connection()
-            : client_fd(-1), d_server_fd(-1), request(""), response(""){}
+        Connection(int fd, std::string ip)
+            : client_fd(fd), d_server_fd(-1), client_ip(ip), request(""), response(""){}
     };
 
-    // mapping client_fds to Connection struct 
-    std::unordered_map<int, Connection> connections;
+    std::atomic<int> client_count = 0;
+    std::atomic<bool> signal_flag{false};
+    std::unordered_set<std::string> fsites;
+    std::shared_mutex fsites_mutex;
 
     void socket_init();
     void server_bind(struct sockaddr_in&, const int&);
-    void server_listen(int maxSize);
-    int get_socket_p() const; 
+    void _listen(int maxSize);
+    std::unique_ptr<struct Connection> accept_client();
+    void server_run(std::unique_ptr<Connection>);
 };
 #endif

@@ -1,5 +1,6 @@
 #ifndef FILE_T
 #define FILE_T
+
 #include <iostream>
 #include <string>
 #include <cstring>
