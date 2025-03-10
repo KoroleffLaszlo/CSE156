@@ -1,6 +1,6 @@
 CC = g++
 CFLAG = -Wall -Werror -g -std=c++17 -I$(IDIR)
-LDFLAGS = -lstdc++fs -pthread # Add this if your compiler requires explicit linking for filesystem
+LDFLAGS = -lstdc++fs -pthread -lssl -lcrypto # Add this if your compiler requires explicit linking for filesystem
 
 BDIR = bin
 ODIR = build

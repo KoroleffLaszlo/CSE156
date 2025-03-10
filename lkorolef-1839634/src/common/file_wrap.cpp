@@ -22,6 +22,13 @@ namespace Helper{
 // returns unordered_set containing forbidden domains (for faster look-up)
 // TODO: make file if not exist
 std::unordered_set<std::string> File::file_read_stream(const std::string& filePath){
+    std::filesystem::path path(filePath);
+
+    // Ensure parent directory exists before opening the file (return empty set)
+    if(!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()){
+        std::filesystem::create_directories(path.parent_path());
+        return std::unordered_set<std::string>();
+    }
     std::ifstream file(filePath);
     if(!file){
         throw std::runtime_error(std::string("Failed to read from file: ") + std::string(strerror(errno)));
@@ -38,13 +45,24 @@ std::unordered_set<std::string> File::file_read_stream(const std::string& filePa
     return entries;
 }
 
-// TODO: make file if not exist
-int File::file_write_stream(std::ofstream& file, const std::vector<uint8_t>& data) {
-    if(!file.is_open()){
-        throw std::runtime_error("Failed to write to file. Invalid file stream");
+int File::file_write_stream(const std::string &filePath, const std::string &data){
+    std::filesystem::path path(filePath);
+
+    // Ensure parent directory exists before opening the file
+    if(!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()){
+        std::filesystem::create_directories(path.parent_path());
     }
-    if(!file.write(reinterpret_cast<const char*>(data.data()), data.size())){
-        throw std::runtime_error("Error writing to file.");
+
+    std::ofstream file(filePath);
+    if(!file){
+        std::cerr<<"[ERROR] Cannot open file: "<<filePath << std::endl;
+        return -1;
     }
-    return 0; // success
+    file<<data;
+    if(!file){  // check if write failed
+        std::cerr<<"[ERROR] Failed to write to file: "<<filePath<<std::endl;
+        return -1;
+    }
+    file.close();
+    return 0;
 }

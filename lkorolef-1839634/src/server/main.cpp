@@ -64,15 +64,18 @@ int main(int argc, char* argv[]){
     try{
         std::tuple<std::string, std::string, std::string> args = Helper::command_line_parse(argc, argv);
         server_handler.fsites =  File::file_read_stream(std::get<1>(args)); // assigns forbidden sites to global set for threads to access
+        server_handler.logFile = std::get<2>(args); // logging file
 
         int listen_port = std::stoi(std::get<0>(args)); // listening port: str -> int
         server_handler.socket_init();
+        server_handler.openssl_init(); // initialize the secure socket for comms with server destination 
         server_handler.server_bind(srv_addr, listen_port);
         server_handler._listen(MAX_CLIENTS);
         std::cout<<"[INFO] Server running..."<<std::endl;
         
         while(true){
             if(server_handler.signal_flag.load(std::memory_order_relaxed)){
+                std::unique_lock lock(server_handler.fsites_mutex); // lock all reading threads for update
                 server_handler.fsites = File::file_read_stream(std::get<1>(args)); // reload forbidden sites
                 server_handler.signal_flag.store(false, std::memory_order_relaxed);
             }
@@ -95,7 +98,9 @@ int main(int argc, char* argv[]){
 
     }catch(const std::exception &e){
         std::cerr<<"Error - "<< e.what() <<std::endl;
+        server_handler.cleanup_openssl();
         return EXIT_FAILURE;
     }
+    server_handler.cleanup_openssl();
     return EXIT_SUCCESS;
 }

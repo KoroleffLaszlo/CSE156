@@ -17,6 +17,6 @@
 class File{
 public:
     static std::unordered_set<std::string> file_read_stream(const std::string&);
-    static int file_write_stream(std::ofstream&, const std::vector<uint8_t>&);
+    static int file_write_stream(const std::string&, const std::string&);
 };
 #endif
