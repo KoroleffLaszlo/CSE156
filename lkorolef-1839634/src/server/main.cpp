@@ -27,11 +27,11 @@ Server server_handler;
 _Thread thread_handler;
 
 namespace Helper {
-    std::tuple<std::string, std::string, std::string> command_line_parse(int argc, char* argv[]) {
+    std::tuple<std::string, std::string, std::string, bool> command_line_parse(int argc, char* argv[]) {
         std::string listen_port, forbidden_sites_file, log_file;
         int opt;
-
-        while((opt = getopt(argc, argv, "p:a:l:")) != -1){
+        bool u_flag = false;
+        while((opt = getopt(argc, argv, "p:a:l:u")) != -1){
             switch(opt){
                 case 'p':
                     listen_port = optarg;
@@ -42,30 +42,52 @@ namespace Helper {
                 case 'l':
                     log_file = optarg;
                     break;
+                case 'u':
+                    u_flag = true;
+                    break;
                 default:
-                    throw std::runtime_error("expected: -p <port> -a <forbidden_sites_path> -l <access_log_path>");
+                    throw std::runtime_error("expected: -p <port> -a <forbidden_sites_path> -l <access_log_path> [-u]");
             }
         }
 
-        return {listen_port, forbidden_sites_file, log_file};
+        return {listen_port, forbidden_sites_file, log_file, u_flag};
     }
+}
 
-    void handle_signal(int signum){
+
+void handle_signal(int signum){
+    if(signum == SIGINT){
         std::cout<<"[INFO] Ctrl+C received -- updating forbidden sites"<<std::endl;
         server_handler.signal_flag.store(true, std::memory_order_relaxed);
     }
 }
 
+void setup_signal_handler() {
+    struct sigaction sa;
+    sa.sa_handler = handle_signal; // registers SIGINT handler
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0; // insures accept() restarts
+
+    if(sigaction(SIGINT, &sa, NULL) < 0) {
+        perror("[FATAL] sigaction failed");
+        exit(EXIT_FAILURE);
+    }
+}
+
 int main(int argc, char* argv[]){
 
+    setup_signal_handler();
     struct sockaddr_in srv_addr;
-    std::signal(SIGINT, Helper::handle_signal);
 
     try{
-        std::tuple<std::string, std::string, std::string> args = Helper::command_line_parse(argc, argv);
-        server_handler.fsites =  File::file_read_stream(std::get<1>(args)); // assigns forbidden sites to global set for threads to access
-        server_handler.logFile = std::get<2>(args); // logging file
-
+        std::tuple<std::string, std::string, std::string, bool> args = Helper::command_line_parse(argc, argv);
+        server_handler.fsites = std::make_shared<std::unordered_set<std::string>>  // assigns forbidden sites to global set for threads to access
+                                (File::file_read_stream(std::get<1>(args)));
+   
+        std::cout<<"]"<<std::endl;
+        File::open_log_file(std::get<2>(args));
+        server_handler.i_cert_flag = std::get<3>(args); // certification ignore flag
+        server_handler.ffile = std::get<1>(args); // forbidden file
         int listen_port = std::stoi(std::get<0>(args)); // listening port: str -> int
         server_handler.socket_init();
         server_handler.openssl_init(); // initialize the secure socket for comms with server destination 
@@ -74,11 +96,19 @@ int main(int argc, char* argv[]){
         std::cout<<"[INFO] Server running..."<<std::endl;
         
         while(true){
-            if(server_handler.signal_flag.load(std::memory_order_relaxed)){
-                std::unique_lock lock(server_handler.fsites_mutex); // lock all reading threads for update
-                server_handler.fsites = File::file_read_stream(std::get<1>(args)); // reload forbidden sites
-                server_handler.signal_flag.store(false, std::memory_order_relaxed);
+            std::cout<<"IN WHILE"<<std::endl;
+            // if SIGINT detected
+            bool flag_value = server_handler.signal_flag.load(std::memory_order_relaxed); // Load atomic value
+            std::cout << "[DEBUG] check before condition statement: " << flag_value << "-->";
+            if(flag_value == true){
+                std::unique_lock write_lock(server_handler.fsites_mutex); // lock all reading threads for update
+                auto updated_fsites = std::make_shared<std::unordered_set<std::string>>(File::file_read_stream(std::get<1>(args)));
+                server_handler.fsites = updated_fsites; // stores updated set into server object
+                server_handler.signal_flag.store(false, std::memory_order_relaxed); // lowers SIGINT flag
+                flag_value = server_handler.signal_flag.load(std::memory_order_relaxed);
             }
+
+            // max clients connected
             if(server_handler.client_count.load() >= MAX_CLIENTS){
                 std::cout<<"[ERROR] Maximum client connections reached"<<std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(1)); // sleep main process until threads are free
@@ -87,20 +117,25 @@ int main(int argc, char* argv[]){
 
             std::unique_ptr<Server::Connection> _conn = server_handler.accept_client();
             
-            if(!_conn) {continue;} // no clients attempting to connect -> go back and wait 
+            if(!_conn){
+                std::cout<<"NULLPTR"<<std::endl;
+                continue;
+            } // no clients attempting to connect -> go back and wait 
 
-            std::thread client_thread = thread_handler.thread_create(&Server::server_run, 
-                                                                    server_handler, 
+            std::thread client_thread = thread_handler.thread_create(&Server::server_run,
+                                                                    server_handler,
                                                                     std::move(_conn));
-            std::cout<<"[THREAD] "<<client_thread.get_id()<<std::endl;                                                   
+            //std::cout<<"[THREAD] "<<client_thread.get_id()<<std::endl;                                                   
             client_thread.detach(); // fire and forget
         }
 
     }catch(const std::exception &e){
         std::cerr<<"Error - "<< e.what() <<std::endl;
         server_handler.cleanup_openssl();
+        File::close_log();
         return EXIT_FAILURE;
     }
     server_handler.cleanup_openssl();
+    File::close_log();
     return EXIT_SUCCESS;
 }

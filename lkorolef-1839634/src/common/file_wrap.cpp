@@ -1,14 +1,13 @@
 #include "../../include/common/file_wrap.h"
 
 #include <iostream>
-#include <string>
-#include <cstring>
-#include <cerrno>
-#include <cstdint>
 #include <fstream>
+#include <mutex>
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
+#include <string>
 #include <filesystem>
-#include <errno.h>  
-#include <unordered_set>
 
 namespace Helper{
     // removes leading and tailing whitespaces
@@ -19,16 +18,46 @@ namespace Helper{
     }
 }
 
+std::mutex File::log_mutex;
+int File::log_fd = -1;
+std::ofstream File::log_file;
+
+void File::open_log_file(const std::string &filePath){
+    std::filesystem::path path(filePath);
+    if (!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+
+    log_fd = open(filePath.c_str(), O_WRONLY | O_CREAT | O_APPEND, 0666);
+    if(log_fd == -1){
+        throw std::runtime_error(std::string("Failed to open log file -- log_fd: ") + std::string(strerror(errno)));
+    }
+
+    log_file.open(filePath, std::ios::app);
+    if(!log_file){
+        throw std::runtime_error(std::string("Failed to open log file -- log_file: ") + std::string(strerror(errno)));
+    }
+}
+
+void File::close_log(){
+    if (log_file.is_open()) {
+        log_file.close();
+    }
+    if (log_fd != -1) {
+        close(log_fd);
+    }
+}
+
 // returns unordered_set containing forbidden domains (for faster look-up)
-// TODO: make file if not exist
 std::unordered_set<std::string> File::file_read_stream(const std::string& filePath){
     std::filesystem::path path(filePath);
-
-    // Ensure parent directory exists before opening the file (return empty set)
-    if(!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()){
-        std::filesystem::create_directories(path.parent_path());
-        return std::unordered_set<std::string>();
+    if(!std::filesystem::exists(path)){
+        std::cerr << "[WARNING] File does not exist, creating: " << filePath << std::endl;
+        std::ofstream newFile(filePath);
+        if(!newFile) {throw std::runtime_error("[ERROR] Failed to create file: " + filePath);}
+        return {};
     }
+
     std::ifstream file(filePath);
     if(!file){
         throw std::runtime_error(std::string("Failed to read from file: ") + std::string(strerror(errno)));
@@ -45,24 +74,14 @@ std::unordered_set<std::string> File::file_read_stream(const std::string& filePa
     return entries;
 }
 
-int File::file_write_stream(const std::string &filePath, const std::string &data){
-    std::filesystem::path path(filePath);
-
-    // Ensure parent directory exists before opening the file
-    if(!std::filesystem::exists(path.parent_path()) && !path.parent_path().empty()){
-        std::filesystem::create_directories(path.parent_path());
+void File::file_write_stream(const std::string &message) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+    if(log_fd != -1){
+        flock(log_fd, LOCK_EX);
+        if(log_file.is_open()){
+            log_file << message << std::endl;
+            log_file.flush();
+        }
+        flock(log_fd, LOCK_UN);
     }
-
-    std::ofstream file(filePath);
-    if(!file){
-        std::cerr<<"[ERROR] Cannot open file: "<<filePath << std::endl;
-        return -1;
-    }
-    file<<data;
-    if(!file){  // check if write failed
-        std::cerr<<"[ERROR] Failed to write to file: "<<filePath<<std::endl;
-        return -1;
-    }
-    file.close();
-    return 0;
 }

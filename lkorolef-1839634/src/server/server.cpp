@@ -1,5 +1,6 @@
 #include "../../include/server/server.h"
 #include "../../include/common/datagram.h"
+#include "../../include/common/file_wrap.h"
 
 #include <iostream>
 #include <string>
@@ -18,7 +19,8 @@
 #include <sys/select.h>
 #include <sys/types.h>   
 #include <sys/time.h>    
-#include <unistd.h>      
+#include <unistd.h>
+#include <tuple>   
 #include <fcntl.h>
 #include <bitset>
 #include <iomanip>
@@ -27,9 +29,9 @@
 #include <filesystem>
 #include <shared_mutex>
 #include <openssl/ssl.h>
-#include <openssl/bio.h>
+#include <openssl/x509.h>
 #include <openssl/err.h>
-
+#include <unistd.h>
 
 #define MTU_MAX 32000
 
@@ -38,7 +40,8 @@ enum ErrorCheck {
     E_IP_RESBAD = 11, // ip resolved from getnameinfo() bad
     E_DOMAIN_RESBAD = 12, // domain resolved from getaddrinfo() bad
     E_FBID_REQ = 13, // forbidden request from client
-    ERROR = 14 // catch all error handle
+    E_DISCONNECT = 14, // connection failed in communication
+    E_ERROR = 15 // catch all error handle
 };
 
 namespace Debug{
@@ -97,7 +100,7 @@ namespace Resolve {
     }
 }
 
-namespace Log {
+namespace Log_handle {
     std::string timeStamp() {
         std::time_t now = std::time(nullptr);
         std::tm gmt = *std::gmtime(&now);  // Convert to UTC time
@@ -108,8 +111,10 @@ namespace Log {
         return oss.str();
     }
 
-    int log(const std::string &filePath, const std::string &method, const std::string &code){
-        return 0;
+    void _log(const std::unique_ptr<Server::Connection>& t){
+        std::string message = t->time_stamp + " " + t->client_ip + " " +
+                            t->request + " " + t->code + " " + t->content_length;
+        File::file_write_stream(message);
     }
 }
 
@@ -131,14 +136,46 @@ void Server::socket_init(){
     }
 }
 
+// checks for cert file existance
+bool Server::setup_ssl_certificates(SSL_CTX* ssl_ctx){
+    const char* cert_file = X509_get_default_cert_file();
+    const char* cert_dir = X509_get_default_cert_dir();
+    if (!ssl_ctx) {
+        std::cout << "[ERROR] SSL_CTX is NULL - Failed to initialize OpenSSL context" << std::endl;
+        return false;
+    }
+
+    if(SSL_CTX_load_verify_locations(ssl_ctx, cert_file, cert_dir)) {return true;}
+
+    // fallback method checks abs paths
+    const char* ca_paths[] = {
+        "/etc/ssl/certs/ca-certificates.crt",  // Debian, Ubuntu, Arch
+        "/etc/pki/tls/certs/ca-bundle.crt",    // RHEL, CentOS, Fedora
+        "/etc/ssl/cert.pem"                    // macOS
+    };
+    for(const char* path : ca_paths){
+        if(access(path, F_OK) == 0){  // Check if the file exists
+            if(SSL_CTX_load_verify_locations(ssl_ctx, path, NULL)){
+                std::cout<<"[DEBUG] fallback SSL_CTX load location success"<<std::endl;
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void Server::openssl_init(){
     SSL_load_error_strings();
     OpenSSL_add_ssl_algorithms();
-    ssl_ctx = SSL_CTX_new(TLS_client_method());  // Create a client SSL context
+    ssl_ctx = SSL_CTX_new(TLS_client_method());  // create a client SSL context
 
     if(!ssl_ctx){
-        std::cerr << "[ERROR] Failed to create OpenSSL context" << std::endl;
-        exit(EXIT_FAILURE);
+        throw std::runtime_error(std::string("failed to create OpenSSL context: ")
+                + std::string(strerror(errno)));
+    }
+
+    if (!setup_ssl_certificates(ssl_ctx)) {
+        std::cerr << "[ERROR] Failed to load CA certificates. HTTPS connections may not work..." << std::endl;
     }
 }
 
@@ -172,6 +209,7 @@ void Server::_listen(int maxSize){
 }
 
 std::unique_ptr<Server::Connection> Server::accept_client(){
+    std::cout << "\nIN ACCEPT" << std::endl;
     struct sockaddr_in client;
     socklen_t client_size = sizeof(client);
     int fd = accept(socket_p, (struct sockaddr*)&client, &client_size);
@@ -184,21 +222,36 @@ std::unique_ptr<Server::Connection> Server::accept_client(){
         return nullptr;
     }
 
-     // thread safe conversion from bytes to char
-     char ip_str[INET_ADDRSTRLEN];
-     inet_ntop(AF_INET, &client.sin_addr, ip_str, INET_ADDRSTRLEN);
- 
-     std::cout<<"[INFO] Client connection accepted ";
-     std::cout<<"- using fd: "<<fd<< std::endl;
+    // thread safe conversion from bytes to char
+    char ip_str[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client.sin_addr, ip_str, INET_ADDRSTRLEN);
 
-     return std::make_unique<Connection>(fd, std::string(ip_str));
+    std::cout<<"[INFO] Client connection accepted ";
+    std::cout<<"- using fd: "<<fd<< std::endl;
+
+
+    return std::make_unique<Connection>(fd, std::string(ip_str), std::ref(fsites));
 }
 
+
 bool Server::is_exist(const std::string &host){
-    std::shared_lock lock(fsites_mutex);
-    if(fsites.find(host) != fsites.end()){ // if found 
-        std::cout<<"[ERROR] Client requests forbidden"<<std::endl;
-        return true;
+    std::unordered_set<std::string> _fsites;
+    { // smaller scope, copying updated fsites to use an instance of current snapshot
+        std::shared_lock<std::shared_mutex> read_lock(fsites_mutex);
+        // std::cout << "[DEBUG] Address of read_lock: " << &fsites_mutex << std::endl;
+        // std::cout<<"ACQUIRED READ LOCK"<<std::endl;
+        // sleep(8);
+        // std::cout<< "\n\n\n" << "---------------------" << "\n\n\n" <<std::endl;
+        // std::cout << "[DEBUG] Thread's forbidden site content:\n[";
+        // for (const auto &i : *(fsites)){
+        //     std::cout << i << std::endl;
+        // }
+        // std::cout << "]" << std::endl;
+        // std::cout<< "\n\n\n" << "---------------------" << "\n\n\n" <<std::endl;
+
+        _fsites = *fsites;
+        read_lock.unlock();
+        // sleep(8); //debug 
     }
 
     if(Resolve::is_ip_address(host)){ // is ip?
@@ -207,11 +260,8 @@ bool Server::is_exist(const std::string &host){
             errno = E_IP_RESBAD;
             return true;
         }
-        if(fsites.find(domain) != fsites.end()){ // domain in forbidden sites list
-            return true;
-        }else{
-            return false;
-        }
+        if(_fsites.find(domain) != _fsites.end()) {return true;}
+        else {return false;}
     }
 
     std::string ip_addr = Resolve::resolve_domain_to_ip(host);
@@ -219,106 +269,203 @@ bool Server::is_exist(const std::string &host){
         errno = E_DOMAIN_RESBAD;
         return true;
     }
-    if(fsites.find(ip_addr) != fsites.end()){ 
-        return true;
-    }
-
+    if(_fsites.find(ip_addr) != _fsites.end()) {return true;}
     return false;
 }
 
-std::string Server::forward_https_request(const std::string& host, const std::string& request){
-    BIO* bio = BIO_new_ssl_connect(ssl_ctx);
-    SSL* ssl;
+// creates connection between the proxy and the destination server
+int Server::create_tcp_connection(const std::string &host){
+    struct addrinfo hints{}, *res = nullptr;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_ADDRCONFIG;
 
-    BIO_get_ssl(bio, &ssl);
-    SSL_set_mode(ssl, SSL_MODE_AUTO_RETRY);
+    std::string port;
+    if((port = Dgram::extract_port(host)) == "") {port = "443";}
+    // TODO: handle condition where client request specifies ssl port
+    if(getaddrinfo(host.c_str(), port.c_str(), &hints, &res) != 0){
+        std::cerr<<"[ERROR] Failed to resolve host: "<<host<<std::endl;
+        return -1;
+    }
+    int sockfd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
+    if(sockfd < 0){
+        std::cerr<<"[ERROR] Failed to create socket"<<std::endl;
+        freeaddrinfo(res);
+        return -1;
+    }
+    if(connect(sockfd, res->ai_addr, res->ai_addrlen) < 0){
+        std::cerr<<"[ERROR] Failed to connect to "<<host<<std::endl;
+        close(sockfd);
+        freeaddrinfo(res);
+        return -1;
+    }
+    freeaddrinfo(res);
+    return sockfd;
+}
 
-    BIO_set_conn_hostname(bio, (host + ":443").c_str());
+std::string Server::forward_https_request(const std::string &host, const std::string &request, bool ignore_cert_errors) {
+    // create tcp connection to server destination
 
-    if(BIO_do_connect(bio) <= 0){
-        BIO_free_all(bio);
+    int sockfd = create_tcp_connection(host);
+    if(sockfd < 0){
         return "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
     }
 
-    if(BIO_do_handshake(bio) <= 0){
-        BIO_free_all(bio);
+    // set up SSL pointer object to set up connection
+    SSL *ssl = SSL_new(ssl_ctx);
+    if(!ssl){
+        std::cerr << "[ERROR] Failed to create SSL structure" << std::endl;
+        close(sockfd);
         return "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
     }
 
-    BIO_write(bio, request.c_str(), request.length());
-    BIO_flush(bio);
-    //std::cout<<"[INFO] Server sending to destination"<<std::endl;
+    SSL_set_fd(ssl, sockfd);
 
-    char response[4096];
-    std::string result;
+    // if flag up ignore ssl ca cert messages
+    if(ignore_cert_errors){
+        SSL_set_verify(ssl, SSL_VERIFY_NONE, nullptr);
+    }
+
+    // SSL handshake
+    if(SSL_connect(ssl) <= 0){
+        std::cerr << "[ERROR] SSL handshake failed with " << host << std::endl;
+        SSL_free(ssl);
+        close(sockfd);
+        return "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+    }
+
+    if(SSL_write(ssl, request.c_str(), request.length()) <= 0){
+        std::cerr<<"[ERROR] SSL_write failed"<<std::endl;
+        SSL_free(ssl);
+        close(sockfd);
+        return "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+    }
+
+    // reads response from server
+    char buffer[8192];
+    std::string response;
     int bytes_read;
-    bool headers_received = false;
 
-    while((bytes_read = BIO_read(bio, response, sizeof(response))) > 0){
-        result.append(response, bytes_read);
-        //std::cout <<"[INFO] Received: "<<bytes_read<<" bytes"<< std::endl;
-
-        if(!headers_received && result.find("\r\n\r\n") != std::string::npos){
-            headers_received = true;
-            //std::cout<<"[INFO] Headers received -- checking content length..."<<std::endl;
-        }
-
-        // check for full response if content-length given
-        size_t content_length_pos = result.find("Content-Length:");
-        if(content_length_pos != std::string::npos){
-            size_t end_of_headers = result.find("\r\n\r\n") + 4;
-            int content_length = std::stoi(result.substr(content_length_pos + 15));
-            if(result.size() >= end_of_headers + content_length){
-                //std::cout<<"[INFO] Full response received -- stopping read"<<std::endl;
-                break;
-            }
-        }
+    while((bytes_read = SSL_read(ssl, buffer, sizeof(buffer))) > 0){
+        response.append(buffer, bytes_read);
     }
 
-    std::cout<<"[INFO] Finished receiving"<<std::endl;
-    BIO_free_all(bio);
-    return result.empty() ? "HTTP/1.1 504 Gateway Timeout\r\nContent-Length: 0\r\n\r\n" : result;
+    if(bytes_read < 0){
+        std::cerr<<"[ERROR] SSL_read failed"<<std::endl;
+        response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+    }
+
+    SSL_shutdown(ssl);
+    SSL_free(ssl);
+    close(sockfd);
+    return response;
+}
+
+// handles sending responses back to the client
+ssize_t Server::send_to_client(const std::unique_ptr<Connection>& t){
+    int client_socket = t->client_fd;
+    ssize_t bytes_sent = 0;
+    ssize_t total_sent = 0;
+    ssize_t response_size = t->response.size();
+    std::string response = t->response;
+
+    Log_handle::_log(t);
+
+    while(total_sent < response_size){
+        bytes_sent = send(client_socket, response.c_str() + total_sent, response_size - total_sent, 0);
+
+        if(bytes_sent < 0){  // client disconnect/err
+            std::cerr<<"[ERROR] Failed to send response to client: "<<strerror(errno)<<std::endl;
+            return -1;
+        }
+        if(bytes_sent == 0){  // client closed connection
+            std::cerr<<"[INFO] Client closed the connection before receiving full response."<<std::endl;
+            return 0;
+        }
+        total_sent += bytes_sent;
+    }
+
+    return total_sent;
 }
 
 void Server::server_run(std::unique_ptr<Connection> t){
 
     client_count++;
-    std::string _recv;
-
+    std::string _recv = "";
+    int send_ret = 0;
     char buffer[MTU_MAX];
     int client_socket = t->client_fd;
 
     // handling possible chunked client request
+    t->time_stamp = Log_handle::timeStamp();
     while(_recv.find("\r\n\r\n") == std::string::npos){ // handles chunking
         int bytes_recv = recv(client_socket, buffer, sizeof(buffer), 0);
         _recv.append(buffer, bytes_recv);
     }
 
-    std::pair<std::string, std::string> p = Dgram::get_method_and_host(_recv); // method -> "GET/HEAD" and host entry
-    t->method = p.first;
-    std::string host = p.second;
-    t->request = Dgram::get_status_code(_recv); // grabbing status code for future logging 
-    std::string req_to_server = Dgram::convert_to_relative_request(_recv); // formatting request to send to destination
-    //std::cout<<"[REQ] Request body to server: \n";
-    //Debug::print_with_special_chars(req);
-    std::cout<<host<<std::endl;
-    std::cout<<t->request<<std::endl;
+    // method -> "GET/HEAD" | host entry | http version
+    std::tuple<std::string, std::string, std::string> tp = Dgram::get_method_host_version(_recv);
+    std::string method = std::get<0>(tp);
+    std::string host = std::get<1>(tp);
+    std::string version = std::get<2>(tp);
 
-    // TODO: proper logging with either errors or if in fsites
-    if(is_exist(host)){ 
-        if(errno == E_IP_RESBAD || errno == E_DOMAIN_RESBAD){ // bad gateway (host doesn't exist)
-            std::cout<<"stopping"<<std::endl;
-        }else{ // forbidden (in fsites)
-            std::cout<<"stopping"<<std::endl;
-        }
+    t->request = Dgram::get_request(_recv); // grabbing response for future logging
+    std::string req_to_server = Dgram::convert_to_relative_request(_recv, t->client_ip); // formatting request to send to destination
+
+    if((method != "GET" && method != "HEAD") || (version != "HTTP/1.1" && version != "HTTPS/1.1")){
+        t->response = "HTTP/1.1 501 Not Implemented\r\nContent-Length: 0\r\n\r\n";
+        t->code = "501";
+        send_ret = send_to_client(std::move(t));
+        if(send_ret <= 0) {std::cerr<<"[ERROR] Connection malformed to client"<<std::endl;}
         client_count--;
         return;
     }
-    // TODO: handle SSL with function and also additional logging
-    std::string res = forward_https_request(host, req_to_server);// handle response back from server
-    // std::cout<<"[INFO] Response from server: \n";
-    // std::cout<<res<<std::endl;
-    // std::cout<<std::endl;
+   
+    if(is_exist(host)){ 
+        if(errno == E_IP_RESBAD || errno == E_DOMAIN_RESBAD){ // bad gateway (host doesn't exist)
+            t->response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+            t->code = "502";
+            send_ret = send_to_client(std::move(t));
+        }else{ // forbidden (in fsites)
+            t->response = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+            t->code = "403";
+            send_ret = send_to_client(std::move(t));
+        }
+        if(send_ret <= 0) {std::cerr<<"[ERROR] Connection malformed to client"<<std::endl;}
+        client_count--;
+        return;
+    }
+
+    t->response = forward_https_request(host, req_to_server, i_cert_flag);// handle response back from server
+
+    // rechecking with possibly updated forbidden sites
+    if(is_exist(host)){ 
+        if(errno == E_IP_RESBAD || errno == E_DOMAIN_RESBAD){ // bad gateway (host doesn't exist)
+            t->response = "HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\n\r\n";
+            t->code = "502";
+            send_ret = send_to_client(std::move(t));
+        }else{ // forbidden (in fsites)
+            t->response = "HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n";
+            t->code = "403";
+            send_ret = send_to_client(std::move(t));
+        }
+        if(send_ret <= 0) {std::cerr<<"[ERROR] Connection malformed to client"<<std::endl;}
+        client_count--;
+        return;
+    }
+
+    // get status code and content length
+    std::pair<std::string, std::string> p = Dgram::get_status_and_length(t->response);
+    t->code = p.first;
+    t->content_length = p.second;
+
+    if((send_ret = send_to_client(std::move(t))) <= 0){
+        std::cerr<<"[ERROR] Connection malformed to client"<<std::endl;
+        client_count--;
+        return;
+    }
+
+    // success 
     client_count--;
     return;
 }

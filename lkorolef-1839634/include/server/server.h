@@ -26,39 +26,45 @@ public:
 
     struct Connection { // maintains cross communication tracking
         int client_fd;
-        // int d_server_fd; // destination server port
         std::string client_ip;
-        std::string method;
+        std::shared_ptr<std::unordered_set<std::string>>& u_fsites; //passed by reference fsites
+        std::string code; // status code
         std::string request; // client request -> "GET http://ucsc.edu/ HTTP/1.1"
         std::string response; // destination server response
         std::string content_length;
         std::string time_stamp;
 
-        Connection(int fd, std::string ip)
+        Connection(int fd, std::string ip, std::shared_ptr<std::unordered_set<std::string>>& set)
             : client_fd(fd), 
-            //d_server_fd(-1), 
-            client_ip(ip), 
-            method(""),
+            client_ip(ip),
+            u_fsites(set),
+            code(""),
             request(""), 
             response(""),
-            content_length(""),
+            content_length("0"),
             time_stamp(""){}
     };
 
+    std::string ffile = "";
     std::atomic<int> client_count = 0;
     std::atomic<bool> signal_flag{false};
-    std::unordered_set<std::string> fsites;
+    std::shared_ptr<std::unordered_set<std::string>> fsites;
     std::shared_mutex fsites_mutex;
+    
     std::string logFile;
+    bool i_cert_flag;
 
     void socket_init();
+    bool setup_ssl_certificates(SSL_CTX*);
     void openssl_init();
     void cleanup_openssl();
     void server_bind(struct sockaddr_in&, const int&);
     void _listen(int maxSize);
     std::unique_ptr<struct Connection> accept_client();
     bool is_exist(const std::string&);
-    std::string forward_https_request(const std::string&, const std::string&);
+    int create_tcp_connection(const std::string&);
+    std::string forward_https_request(const std::string&, const std::string&, bool);
+    ssize_t send_to_client(const std::unique_ptr<Connection>&);
     void server_run(std::unique_ptr<Connection>);
 };
 #endif
