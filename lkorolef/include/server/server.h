@@ -46,13 +46,12 @@ public:
     };
 
     std::string ffile = "";
-    std::atomic<int> client_count = 0;
     std::atomic<bool> signal_flag{false};
     std::shared_ptr<std::unordered_set<std::string>> fsites;
     std::shared_mutex fsites_mutex;
     
     std::string logFile;
-    bool i_cert_flag;
+    bool allow_self_signed;
 
     void socket_init();
     bool setup_ssl_certificates(SSL_CTX*);
@@ -62,8 +61,8 @@ public:
     void _listen(int maxSize);
     std::unique_ptr<struct Connection> accept_client();
     bool is_exist(const std::string&);
-    int create_tcp_connection(const std::string&);
-    std::string forward_https_request(const std::string&, const std::string&, bool);
+    int create_tcp_connection(const std::string&, const std::string&);
+    std::string forward_https_request(const std::string&, const std::string&);
     ssize_t send_to_client(const std::unique_ptr<Connection>&);
     void server_run(std::unique_ptr<Connection>);
 };

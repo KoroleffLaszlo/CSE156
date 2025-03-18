@@ -54,7 +54,6 @@ namespace Helper {
     }
 }
 
-
 void handle_signal(int signum){
     if(signum == SIGINT){
         std::cout<<"[INFO] Ctrl+C received -- updating forbidden sites"<<std::endl;
@@ -62,7 +61,7 @@ void handle_signal(int signum){
     }
 }
 
-void setup_signal_handler() {
+void setup_signal_handler(){
     struct sigaction sa;
     sa.sa_handler = handle_signal; // registers SIGINT handler
     sigemptyset(&sa.sa_mask);
@@ -83,23 +82,21 @@ int main(int argc, char* argv[]){
         std::tuple<std::string, std::string, std::string, bool> args = Helper::command_line_parse(argc, argv);
         server_handler.fsites = std::make_shared<std::unordered_set<std::string>>  // assigns forbidden sites to global set for threads to access
                                 (File::file_read_stream(std::get<1>(args)));
-   
-        std::cout<<"]"<<std::endl;
+
         File::open_log_file(std::get<2>(args));
-        server_handler.i_cert_flag = std::get<3>(args); // certification ignore flag
+        server_handler.allow_self_signed = std::get<3>(args); // certification ignore flag
         server_handler.ffile = std::get<1>(args); // forbidden file
         int listen_port = std::stoi(std::get<0>(args)); // listening port: str -> int
         server_handler.socket_init();
         server_handler.openssl_init(); // initialize the secure socket for comms with server destination 
         server_handler.server_bind(srv_addr, listen_port);
         server_handler._listen(MAX_CLIENTS);
+
         std::cout<<"[INFO] Server running..."<<std::endl;
         
         while(true){
-            std::cout<<"IN WHILE"<<std::endl;
             // if SIGINT detected
             bool flag_value = server_handler.signal_flag.load(std::memory_order_relaxed); // Load atomic value
-            std::cout << "[DEBUG] check before condition statement: " << flag_value << "-->";
             if(flag_value == true){
                 std::unique_lock write_lock(server_handler.fsites_mutex); // lock all reading threads for update
                 auto updated_fsites = std::make_shared<std::unordered_set<std::string>>(File::file_read_stream(std::get<1>(args)));
@@ -108,19 +105,11 @@ int main(int argc, char* argv[]){
                 flag_value = server_handler.signal_flag.load(std::memory_order_relaxed);
             }
 
-            // max clients connected
-            if(server_handler.client_count.load() >= MAX_CLIENTS){
-                std::cout<<"[ERROR] Maximum client connections reached"<<std::endl;
-                std::this_thread::sleep_for(std::chrono::seconds(1)); // sleep main process until threads are free
-                continue;
-            }
-
             std::unique_ptr<Server::Connection> _conn = server_handler.accept_client();
             
             if(!_conn){
-                std::cout<<"NULLPTR"<<std::endl;
-                continue;
-            } // no clients attempting to connect -> go back and wait 
+                continue; // no clients attempting to connect -> go back and wait 
+            } 
 
             std::thread client_thread = thread_handler.thread_create(&Server::server_run,
                                                                     server_handler,
